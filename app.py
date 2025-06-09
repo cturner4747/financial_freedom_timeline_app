@@ -66,6 +66,14 @@ with col2:
     rental2_appreciation = st.slider("Rental #2: Annual Appreciation (%)", 0.0, 10.0, 3.0) if rental2_on else 0
 
 # --- RENTAL ADJUSTMENTS ---
+# --- NEW RENTAL PURCHASE MODELING ---
+st.header("🏘️ Additional Rental Property Purchase")
+add_new_rental = st.checkbox("Enable Purchase of New Rental Property?")
+if add_new_rental:
+    new_rental_year = st.number_input("New Rental Purchase Year", value=12)
+    new_rental_cost = st.number_input("New Rental Down Payment", value=40000)
+    new_rental_cashflow = st.number_input("New Rental Monthly Net Cash Flow", value=600)
+
 st.header("🔧 Rental Property Adjustments")
 vacancy_pct = st.slider("Vacancy + Maintenance Loss (%)", 0.0, 30.0, 15.0)
 
@@ -193,3 +201,4 @@ st.write(f"Push-Hard Mode: {'Enabled' if push_hard else 'Disabled'}, Boost: ${pu
 st.write(f"Home Loan: ${home_loan:,.0f} at {mortgage_rate:.2f}%, Term: {mortgage_years} yrs, Start Year: {mortgage_start_year}")
 st.write(f"Retirement Growth: {retirement_growth:.1f}%, Annual Contribution: ${retirement_contribution:,.0f}")
 st.write(f"Student Loan: ${student_loan_balance:,.0f} at {student_loan_rate:.2f}% for {student_loan_term} yrs{' (forgiveness enabled)' if forgiveness_toggle else ''}")
+
