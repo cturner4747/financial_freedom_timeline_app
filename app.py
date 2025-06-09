@@ -93,6 +93,7 @@ vacancy_pct = st.slider("Vacancy + Maintenance Loss (%)", 0.0, 30.0, 15.0)
 
 
 # --- FRUGAL MODE STRATEGY ---
+years = list(range(1, 21))
 st.header("🧘 Frugal Mode Settings")
 
 frugal_mode_years = st.multiselect("Select Years to Activate Frugal Mode", options=years)
@@ -143,7 +144,6 @@ push_hard = st.toggle("💪 Push-Hard Upfront Mode (bonus income early)", value=
 push_income_boost = 10000 if push_hard else 0
 
 # --- YEARS & SIMULATION SETUP ---
-years = list(range(1, 21))
 df = pd.DataFrame({"Year": years})
 mortgage_payment = calc_pmt(mortgage_rate/100/12, mortgage_years*12, home_loan)
 heloc_annual_payment = (heloc_used / heloc_term) if heloc_used > 0 else 0
@@ -229,3 +229,4 @@ st.write(f"Push-Hard Mode: {'Enabled' if push_hard else 'Disabled'}, Boost: ${pu
 st.write(f"Home Loan: ${home_loan:,.0f} at {mortgage_rate:.2f}%, Term: {mortgage_years} yrs, Start Year: {mortgage_start_year}")
 st.write(f"Retirement Growth: {retirement_growth:.1f}%, Annual Contribution: ${retirement_contribution:,.0f}")
 st.write(f"Student Loan: ${student_loan_balance:,.0f} at {student_loan_rate:.2f}% for {student_loan_term} yrs{' (forgiveness enabled)' if forgiveness_toggle else ''}")
+
