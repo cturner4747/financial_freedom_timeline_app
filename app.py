@@ -6,6 +6,12 @@ st.set_page_config(page_title="Financial Freedom Timeline Planner", layout="wide
 
 st.title("📈 Financial Freedom Timeline Planner")
 
+# --- Mortgage Payment Helper ---
+def calc_pmt(rate, nper, pv):
+    if rate == 0:
+        return pv / nper
+    return (pv * rate) / (1 - (1 + rate) ** -nper)
+
 # --- HOME & LOAN INPUTS ---
 st.header("🏡 Home & Loan Details")
 col1, col2, col3 = st.columns(3)
@@ -89,7 +95,7 @@ df = pd.DataFrame({"Year": years})
 
 # --- SIMULATION LOOP ---
 mortgage = home_loan
-mortgage_payment = np.pmt(mortgage_rate/100/12, mortgage_years*12, -home_loan)
+mortgage_payment = calc_pmt(mortgage_rate/100/12, mortgage_years*12, home_loan)
 heloc_bal = heloc_used
 heloc_annual_payment = (heloc_used / heloc_term) if heloc_used > 0 else 0
 student_loan_bal = student_loan_balance
@@ -194,5 +200,3 @@ st.write(f"Retirement Growth: {retirement_growth:.1f}%, Annual Contribution: ${r
 st.write(f"Student Loan: ${student_loan_balance:,.0f} at {student_loan_rate:.2f}% for {student_loan_term} yrs{' (forgiveness enabled)' if forgiveness_toggle else ''}")
 
 st.success("See year-by-year risk flags and suggestions above to decide when to add rentals, pay down debt, or increase investments.")
-
-
