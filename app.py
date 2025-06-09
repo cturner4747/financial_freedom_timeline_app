@@ -66,6 +66,20 @@ with col2:
     rental2_appreciation = st.slider("Rental #2: Annual Appreciation (%)", 0.0, 10.0, 3.0) if rental2_on else 0
 
 # --- RENTAL ADJUSTMENTS ---
+# --- ADDITIONAL RENTAL PROPERTY PURCHASE ---
+st.header("🏘️ Additional Rental Property Purchase")
+
+add_new_rental = st.checkbox("Enable Purchase of Rental #3?")
+if add_new_rental:
+    new_rental_year = st.number_input("Rental #3 Purchase Year", value=12)
+    new_rental_cost = st.number_input("Rental #3 Down Payment", value=40000)
+    new_rental_cashflow = st.number_input("Rental #3 Monthly Net Cash Flow", value=600)
+    new_rental_funding = st.radio("How will the down payment be funded?", options=["Cash", "HELOC on Primary Home", "HELOC on Rental #1"])
+    if new_rental_funding != "Cash":
+        new_heloc_rate = st.number_input("Rental #3 HELOC Interest Rate (%)", value=8.0)
+        new_heloc_term = st.number_input("Rental #3 HELOC Term (years)", value=5)
+        new_heloc_start_year = st.number_input("Rental #3 HELOC Repayment Start Year", value=new_rental_year + 1)
+
 # --- NEW RENTAL PURCHASE MODELING ---
 st.header("🏘️ Additional Rental Property Purchase")
 add_new_rental = st.checkbox("Enable Purchase of New Rental Property?")
@@ -201,4 +215,5 @@ st.write(f"Push-Hard Mode: {'Enabled' if push_hard else 'Disabled'}, Boost: ${pu
 st.write(f"Home Loan: ${home_loan:,.0f} at {mortgage_rate:.2f}%, Term: {mortgage_years} yrs, Start Year: {mortgage_start_year}")
 st.write(f"Retirement Growth: {retirement_growth:.1f}%, Annual Contribution: ${retirement_contribution:,.0f}")
 st.write(f"Student Loan: ${student_loan_balance:,.0f} at {student_loan_rate:.2f}% for {student_loan_term} yrs{' (forgiveness enabled)' if forgiveness_toggle else ''}")
+
 
