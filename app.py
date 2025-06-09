@@ -91,6 +91,20 @@ if add_new_rental:
 st.header("🔧 Rental Property Adjustments")
 vacancy_pct = st.slider("Vacancy + Maintenance Loss (%)", 0.0, 30.0, 15.0)
 
+
+# --- FRUGAL MODE STRATEGY ---
+st.header("🧘 Frugal Mode Settings")
+
+frugal_mode_years = st.multiselect("Select Years to Activate Frugal Mode", options=years)
+frugal_expense_cut_pct = st.slider("Frugal Mode: Expense Cut (%)", 0.0, 50.0, 15.0)
+
+frugal_suspend_retirement = st.checkbox("Suspend Retirement Contributions During Frugal Mode")
+frugal_cut_secondary_income = st.checkbox("Cut Secondary Incomes During Frugal Mode")
+frugal_discretionary_only = st.checkbox("Only Cut Discretionary (not Fixed) Expenses")
+
+# Optional split: assume 60% fixed, 40% discretionary as a default model
+fixed_expense_ratio = 0.6
+discretionary_expense_ratio = 1.0 - fixed_expense_ratio
 # --- EXPENSES ---
 st.header("📉 Expense Assumptions")
 col1, col2 = st.columns(2)
@@ -173,7 +187,7 @@ for y in years:
     if forgiveness_toggle and y == forgiveness_year:
         student_loan_bal = 0
 
-    retirement = retirement * (1 + retirement_growth / 100) + retirement_contribution
+    retirement = retirement * (1 + retirement_growth / 100) + rc
     home_equity = min(home_value, home_equity + mortg)
     rental1_equity *= (1 + rental1_appreciation / 100)
     rental2_equity *= (1 + rental2_appreciation / 100) if rental2_on else 0
@@ -215,5 +229,3 @@ st.write(f"Push-Hard Mode: {'Enabled' if push_hard else 'Disabled'}, Boost: ${pu
 st.write(f"Home Loan: ${home_loan:,.0f} at {mortgage_rate:.2f}%, Term: {mortgage_years} yrs, Start Year: {mortgage_start_year}")
 st.write(f"Retirement Growth: {retirement_growth:.1f}%, Annual Contribution: ${retirement_contribution:,.0f}")
 st.write(f"Student Loan: ${student_loan_balance:,.0f} at {student_loan_rate:.2f}% for {student_loan_term} yrs{' (forgiveness enabled)' if forgiveness_toggle else ''}")
-
-
