@@ -1,151 +1,198 @@
 import streamlit as st
 import pandas as pd
-import matplotlib.pyplot as plt
+import numpy as np
 
 st.set_page_config(page_title="Financial Freedom Timeline Planner", layout="wide")
 
 st.title("📈 Financial Freedom Timeline Planner")
 
-# --- Income Inputs ---
-st.header("Income Sources")
+# --- HOME & LOAN INPUTS ---
+st.header("🏡 Home & Loan Details")
+col1, col2, col3 = st.columns(3)
+with col1:
+    home_value = st.number_input("Home Value", value=789560)
+    home_loan = st.number_input("Home Loan Amount", value=510000)
+    mortgage_rate = st.number_input("Mortgage Interest Rate (%)", value=6.5)
+with col2:
+    down_payment = st.number_input("Down Payment", value=100000)
+    mortgage_years = st.number_input("Mortgage Term (years)", value=30)
+    mortgage_start_year = st.number_input("Mortgage Start Year", value=1)
+with col3:
+    heloc_used = st.number_input("HELOC Amount Used (optional)", value=0)
+    heloc_rate = st.number_input("HELOC Interest Rate (%)", value=8.0)
+    heloc_term = st.number_input("HELOC Term (years)", value=5)
+    heloc_start_year = st.number_input("HELOC Repayment Start Year", value=2)
+
+# --- INCOME INPUTS ---
+st.header("👨‍👩‍👧 Income Sources")
 col1, col2 = st.columns(2)
 with col1:
-    cody_primary = st.number_input("Cody’s Primary Income (Annual)", value=90000)
-    cody_secondary = st.number_input("Cody’s Secondary Income (Annual)", value=5000)
+    cody_primary = st.number_input("Cody's Primary Income (annual)", value=90000)
+    cody_secondary = st.number_input("Cody's Secondary Income (annual)", value=5000)
 with col2:
-    lauren_primary = st.number_input("Lauren’s Primary Income (Annual)", value=75000)
-    lauren_secondary = st.number_input("Lauren’s Secondary Income (Annual)", value=0)
+    lauren_primary = st.number_input("Lauren's Primary Income (annual)", value=75000)
+    lauren_secondary = st.number_input("Lauren's Secondary Income (annual)", value=0)
 
-# --- Rental Property Inputs ---
-st.header("🏠 Rental Properties")
-rental1_monthly = st.number_input("Rental 1: Monthly Rent", value=2200)
-rental1_mortgage = st.number_input("Rental 1: Monthly Mortgage", value=1500)
-rental1_start = st.number_input("Rental 1 Start Year", value=1)
+# --- RENTAL INPUTS ---
+st.header("🏠 Rental Properties (Net Monthly Rent - Mortgage)")
+col1, col2 = st.columns(2)
+with col1:
+    rental1_start = st.number_input("Rental #1: Start Year", value=1)
+    rental1_monthly_net = st.number_input("Rental #1: Net Monthly Cash Flow", value=700)
+    rental1_appreciation = st.slider("Rental #1: Annual Appreciation (%)", 0.0, 10.0, 3.0)
+with col2:
+    rental2_on = st.checkbox("Add Rental #2?")
+    rental2_start = st.number_input("Rental #2: Start Year", value=5) if rental2_on else 99
+    rental2_monthly_net = st.number_input("Rental #2: Net Monthly Cash Flow", value=700) if rental2_on else 0
+    rental2_appreciation = st.slider("Rental #2: Annual Appreciation (%)", 0.0, 10.0, 3.0) if rental2_on else 0
 
-rental2_monthly = st.number_input("Rental 2: Monthly Rent", value=2200)
-rental2_mortgage = st.number_input("Rental 2: Monthly Mortgage", value=1600)
-rental2_start = st.number_input("Rental 2 Start Year", value=5)
+# --- EXPENSES ---
+st.header("📉 Expense Assumptions")
+col1, col2 = st.columns(2)
+with col1:
+    base_expenses = st.number_input("Annual Living Expenses (starting)", value=75000)
+    expense_inflation = st.slider("Annual Expense Inflation (%)", 0.0, 10.0, 3.0)
+    stress_test = st.checkbox("Add +5% Stress-Test Inflation?")
+with col2:
+    emergency_fund = st.number_input("Target Emergency Fund", value=25000)
+    income_drop = st.checkbox("Toggle 10% Income Drop Scenario")
 
-# --- Expense Assumptions ---
-st.header("📉 Expenses and Assumptions")
-base_expenses = st.number_input("Annual Living Expenses (Starting)", value=75000)
-expense_inflation = st.slider("Annual Expense Inflation Rate (%)", min_value=0.0, max_value=10.0, value=3.0)
-
-# --- Loan Inputs ---
-st.header("🏡 Home Loan and HELOC")
-home_loan_amount = st.number_input("New Home Loan Amount", value=510000)
-heloc_amount = st.number_input("HELOC Amount (if used)", value=0)
-heloc_start = st.number_input("HELOC Repayment Start Year", value=2)
-heloc_term_years = st.number_input("HELOC Term (Years)", value=5)
-
-# --- Retirement/IRA ---
+# --- RETIREMENT & SAVINGS ---
 st.header("💼 Retirement Investments")
-retirement_start = st.number_input("Current Retirement Balance", value=80000)
-retirement_contribution = st.number_input("Annual Contributions", value=12000)
-retirement_growth = st.slider("Annual Growth Rate (%)", 0.0, 10.0, 7.0)
+col1, col2 = st.columns(2)
+with col1:
+    retirement_start = st.number_input("Current Retirement Balance", value=80000)
+    retirement_contribution = st.number_input("Annual Contributions", value=12000)
+with col2:
+    retirement_growth = st.slider("Annual Growth Rate (%)", 0.0, 10.0, 7.0)
 
-# --- Push-Hard Toggle ---
-st.header("💪 Effort Mode")
-push_hard = st.toggle("Push-Hard Upfront Mode")
+# --- STUDENT LOAN ---
+st.header("🎓 Student Loan")
+col1, col2, col3 = st.columns(3)
+with col1:
+    student_loan_balance = st.number_input("Student Loan Starting Balance", value=160000)
+    student_loan_rate = st.number_input("Student Loan Interest Rate (%)", value=6.8)
+with col2:
+    student_loan_payment = st.number_input("Monthly Payment", value=650)
+    student_loan_term = st.number_input("Student Loan Payment Duration (years)", value=20)
+with col3:
+    forgiveness_toggle = st.checkbox("Enable Loan Forgiveness?")
+    forgiveness_year = st.number_input("Forgiveness Year", value=20) if forgiveness_toggle else 99
+
+# --- PUSH-HARD TOGGLE ---
+push_hard = st.toggle("💪 Push-Hard Upfront Mode (bonus income early)", value=False)
 push_income_boost = 10000 if push_hard else 0
 
-# --- Simulation ---
-st.header("📊 20-Year Financial Projection")
+# --- YEARS & INITIALS ---
 years = list(range(1, 21))
-cash_flow = []
-cumulative_savings = []
-retirement_balance = []
-home_equity = []
-rental_equity = []
-net_worth = []
-flags = []
-advice = []
+df = pd.DataFrame({"Year": years})
 
+# --- SIMULATION LOOP ---
+mortgage = home_loan
+mortgage_payment = np.pmt(mortgage_rate/100/12, mortgage_years*12, -home_loan)
+heloc_bal = heloc_used
+heloc_annual_payment = (heloc_used / heloc_term) if heloc_used > 0 else 0
+student_loan_bal = student_loan_balance
 retirement = retirement_start
 savings = 0
-home_value = home_loan_amount
-home_loan = home_loan_amount
+home_equity = down_payment
+rental1_equity = 0
+rental2_equity = 0
+networths, cash_flows, cumulative_savings, risk_flags, advice_list = [], [], [], [], []
+retirement_balances, home_equities, rental_equities = [], [], []
 
-for year in years:
-    # --- Income Calculation ---
+for y in years:
+    # --- Incomes ---
     income = (
         cody_primary + lauren_primary +
         cody_secondary + lauren_secondary +
-        push_income_boost * (1 if year <= 2 else 0)
+        push_income_boost * (1 if y <= 2 else 0)
     )
+    if income_drop:
+        income *= 0.9
 
-    # --- Rental Income ---
-    rental_net = 0
-    rental_eq = 0
-    if year >= rental1_start:
-        rental_net += (rental1_monthly - rental1_mortgage) * 12
-        rental_eq += rental1_mortgage * 12 * (year - rental1_start + 1)
-    if year >= rental2_start:
-        rental_net += (rental2_monthly - rental2_mortgage) * 12
-        rental_eq += rental2_mortgage * 12 * (year - rental2_start + 1)
-    income += rental_net
+    # --- Rental ---
+    rental_income = 0
+    if y >= rental1_start:
+        rental_income += rental1_monthly_net * 12
+        rental1_equity += (rental1_monthly_net * 12) * 0.3  # simplistic, user can refine
+    if rental2_on and y >= rental2_start:
+        rental_income += rental2_monthly_net * 12
+        rental2_equity += (rental2_monthly_net * 12) * 0.3  # simplistic, user can refine
 
-    # --- Expense Calculation ---
-    expenses = base_expenses * ((1 + expense_inflation / 100) ** (year - 1))
-    heloc_payment = (heloc_amount / heloc_term_years) if year >= heloc_start and heloc_amount > 0 else 0
-    net = income - expenses - heloc_payment
+    # --- Expenses ---
+    exp_infl = expense_inflation + (5 if stress_test else 0)
+    expenses = base_expenses * ((1 + exp_infl/100) ** (y-1))
 
-    # --- Retirement & Savings ---
-    retirement = retirement * (1 + retirement_growth / 100) + retirement_contribution
+    # --- Loan & Debt ---
+    mortg = mortgage_payment * 12 if y >= mortgage_start_year else 0
+    heloc_pay = heloc_annual_payment if (heloc_used > 0 and y >= heloc_start_year and y < heloc_start_year+heloc_term) else 0
+
+    # --- Student Loan Logic ---
+    sl_pay = student_loan_payment * 12 if (not forgiveness_toggle or y < forgiveness_year) and student_loan_bal > 0 else 0
+    student_loan_interest = student_loan_bal * student_loan_rate / 100 if student_loan_bal > 0 else 0
+    student_loan_bal = max(0, student_loan_bal + student_loan_interest - sl_pay)
+    if forgiveness_toggle and y == forgiveness_year:
+        student_loan_bal = 0
+
+    # --- Retirement Growth ---
+    retirement = retirement * (1 + retirement_growth/100) + retirement_contribution
+
+    # --- Equity Tracking ---
+    home_equity = min(home_value, home_equity + mortg)  # Not perfect but tracks payoff
+    rental1_equity *= (1 + rental1_appreciation / 100)
+    rental2_equity *= (1 + rental2_appreciation / 100) if rental2_on else 0
+
+    # --- Cash Flow ---
+    net = income + rental_income - expenses - mortg - heloc_pay - sl_pay
     savings += max(net, 0)
+    net_worth = savings + home_equity + rental1_equity + rental2_equity + retirement - student_loan_bal
 
-    # --- Equity & Net Worth ---
-    home_eq = (home_loan_amount / 30) * 12 * year
-    networth = savings + home_eq + rental_eq + retirement
-
-    # --- Risk Flagging ---
+    # --- Risk Flags & Guidance ---
     if net < 0:
-        flag = "🔴"
+        risk = "🔴"
+        advice = "⚠️ Tight year: review expenses or defer big investments"
     elif net < 10000:
-        flag = "🟡"
+        risk = "🟡"
+        advice = "Consider delaying new rental or boosting income"
     else:
-        flag = "🟢"
+        risk = "🟢"
+        advice = ""
+    if net > 20000 and (not rental2_on or (rental2_on and y < rental2_start)):
+        advice = "Good cash flow: consider new rental or extra investment"
 
-    # --- Strategy Advice ---
-    suggest = ""
-    if net > 15000 and year >= 5:
-        suggest = "📌 Consider adding rental property"
-    elif net < 0:
-        suggest = "⚠️ Review expenses or income"
-    elif year == 10 and retirement < 250000:
-        suggest = "💡 Consider increasing retirement savings"
-    else:
-        suggest = ""
-
-    # --- Append Data ---
-    cash_flow.append(net)
+    # --- Collect for table ---
+    cash_flows.append(net)
     cumulative_savings.append(savings)
-    retirement_balance.append(retirement)
-    home_equity.append(home_eq)
-    rental_equity.append(rental_eq)
-    net_worth.append(networth)
-    flags.append(flag)
-    advice.append(suggest)
+    retirement_balances.append(retirement)
+    home_equities.append(home_equity)
+    rental_equities.append(rental1_equity + rental2_equity)
+    networths.append(net_worth)
+    risk_flags.append(risk)
+    advice_list.append(advice)
 
-# --- DataFrame & Display ---
-df = pd.DataFrame({
-    "Year": years,
-    "Net Cash Flow": cash_flow,
-    "Cumulative Savings": cumulative_savings,
-    "Retirement Balance": retirement_balance,
-    "Home Equity": home_equity,
-    "Rental Equity": rental_equity,
-    "Net Worth": net_worth,
-    "Risk": flags,
-    "Advice": advice
-})
+# --- DataFrame ---
+df["Net Cash Flow"] = cash_flows
+df["Cumulative Savings"] = cumulative_savings
+df["Retirement Balance"] = retirement_balances
+df["Home Equity"] = home_equities
+df["Rental Equity"] = rental_equities
+df["Net Worth"] = networths
+df["Risk"] = risk_flags
+df["Advice"] = advice_list
 
 st.line_chart(df.set_index("Year")[["Net Cash Flow", "Net Worth"]])
-st.dataframe(df)
+st.dataframe(df.style.applymap(
+    lambda v: 'background-color: #fdd' if v == "🔴" else ('background-color: #ffd' if v == "🟡" else ''), subset=['Risk']
+))
 
-# --- Summary ---
-st.subheader("📌 Key Assumptions Summary")
-st.write(f"Expense Inflation: {expense_inflation:.1f}%, HELOC: ${heloc_amount} over {heloc_term_years} years")
-st.write(f"Push-Hard Mode: {'Enabled' if push_hard else 'Disabled'}, Boost: ${push_income_boost}/yr")
-st.write(f"Retirement Growth: {retirement_growth:.1f}%, Annual Contribution: ${retirement_contribution}")
+st.subheader("📌 Assumptions & Strategic Summary")
+st.write(f"Base Expenses: ${base_expenses:,.0f}, Inflation: {expense_inflation:.1f}%{' (+5%)' if stress_test else ''}")
+st.write(f"Push-Hard Mode: {'Enabled' if push_hard else 'Disabled'}, Boost: ${push_income_boost}/yr (Years 1–2)")
+st.write(f"Home Loan: ${home_loan:,.0f} at {mortgage_rate:.2f}%, Term: {mortgage_years} yrs, Start Year: {mortgage_start_year}")
+st.write(f"Retirement Growth: {retirement_growth:.1f}%, Annual Contribution: ${retirement_contribution:,.0f}")
+st.write(f"Student Loan: ${student_loan_balance:,.0f} at {student_loan_rate:.2f}% for {student_loan_term} yrs{' (forgiveness enabled)' if forgiveness_toggle else ''}")
+
+st.success("See year-by-year risk flags and suggestions above to decide when to add rentals, pay down debt, or increase investments.")
+
 
