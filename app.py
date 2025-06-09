@@ -28,7 +28,6 @@ years = list(range(1, 21))
 
 # --- ASSUMPTIONS & STRATEGIC SUMMARY ---
 # Add this to the summary block
-st.write(f"Home Loan: ${mortgage_principal:,.0f} at {mortgage_rate:.2f}%, Term: {mortgage_years} yrs, Start Year: {mortgage_start_year}")
 st.write(f"Mortgage Amount (excluding HELOC): ${mortgage_principal:,.0f}")
 st.write(f"Mortgage Amount (excluding HELOC): ${mortgage_principal:,.0f}")
 heloc_annual_payment = (heloc_used / heloc_term) if heloc_used > 0 else 0
