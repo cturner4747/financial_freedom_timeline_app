@@ -22,8 +22,7 @@ years = list(range(1, 21))
 # (Dynamic retirement toggles remain unchanged)
 
 # --- SIMULATION SETUP ---
-mortgage_principal = home_loan - heloc_used
-mortgage_payment = calc_pmt(mortgage_rate/100/12, mortgage_years*12, mortgage_principal)
+
 heloc_annual_payment = (heloc_used / heloc_term) if heloc_used > 0 else 0
 
 # (Simulation loop remains unchanged except using mortgage_principal instead of home_loan)
@@ -32,5 +31,7 @@ heloc_annual_payment = (heloc_used / heloc_term) if heloc_used > 0 else 0
 # Add this to the summary block
 st.write(f"Home Loan: ${home_loan:,.0f} at {mortgage_rate:.2f}%, Term: {mortgage_years} yrs, Start Year: {mortgage_start_year}")
 st.write(f"Mortgage Amount (excluding HELOC): ${mortgage_principal:,.0f}")
+st.write(f"Mortgage Amount (excluding HELOC): ${mortgage_principal:,.0f}")
+
 
 
