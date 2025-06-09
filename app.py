@@ -117,6 +117,13 @@ with col2:
     emergency_fund = st.number_input("Target Emergency Fund", value=25000)
     income_drop = st.checkbox("Toggle 10% Income Drop Scenario")
 
+
+# --- DYNAMIC RETIREMENT CONTRIBUTION GROWTH ---
+st.header("📈 Dynamic Retirement Contributions")
+
+dynamic_contrib = st.checkbox("Enable Dynamic Retirement Contribution Growth")
+contrib_growth_pct = st.slider("Annual Contribution Growth (%)", 0.0, 10.0, 3.0) if dynamic_contrib else 0.0
+
 # --- RETIREMENT & SAVINGS ---
 st.header("💼 Retirement Investments")
 col1, col2 = st.columns(2)
@@ -158,7 +165,10 @@ retirement_balances, home_equities, rental_equities = [], [], []
 
 # --- MAIN LOOP ---
 for y in years:
-    rc = retirement_contribution  # Ensure rc is always defined
+
+    # --- Dynamic Retirement Contribution ---
+    rc = retirement_contribution * ((1 + contrib_growth_pct / 100) ** (y - 1)) if dynamic_contrib else retirement_contribution
+
     cody_inc = cody_primary * ((1 + cody_raise_pct / 100) ** (y - 1)) if cody_raise_on else cody_primary
     cody_sec_inc = cody_secondary * ((1 + cody_secondary_raise_pct / 100) ** (y - 1)) if cody_secondary_raise_on else cody_secondary
     lauren_inc = lauren_primary * ((1 + lauren_raise_pct / 100) ** (y - 1)) if lauren_raise_on else lauren_primary
@@ -230,6 +240,3 @@ st.write(f"Push-Hard Mode: {'Enabled' if push_hard else 'Disabled'}, Boost: ${pu
 st.write(f"Home Loan: ${home_loan:,.0f} at {mortgage_rate:.2f}%, Term: {mortgage_years} yrs, Start Year: {mortgage_start_year}")
 st.write(f"Retirement Growth: {retirement_growth:.1f}%, Annual Contribution: ${retirement_contribution:,.0f}")
 st.write(f"Student Loan: ${student_loan_balance:,.0f} at {student_loan_rate:.2f}% for {student_loan_term} yrs{' (forgiveness enabled)' if forgiveness_toggle else ''}")
-
-
-
