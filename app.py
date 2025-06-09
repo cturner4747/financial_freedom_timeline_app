@@ -240,3 +240,39 @@ st.write(f"Push-Hard Mode: {'Enabled' if push_hard else 'Disabled'}, Boost: ${pu
 st.write(f"Home Loan: ${home_loan:,.0f} at {mortgage_rate:.2f}%, Term: {mortgage_years} yrs, Start Year: {mortgage_start_year}")
 st.write(f"Retirement Growth: {retirement_growth:.1f}%, Annual Contribution: ${retirement_contribution:,.0f}")
 st.write(f"Student Loan: ${student_loan_balance:,.0f} at {student_loan_rate:.2f}% for {student_loan_term} yrs{' (forgiveness enabled)' if forgiveness_toggle else ''}")
+st.write(f"Frugal Mode Years: {frugal_mode_years}, Expense Cut: {frugal_expense_cut_pct}%")
+if frugal_suspend_retirement:
+    st.write("Retirement contributions suspended in Frugal Mode years.")
+if frugal_cut_secondary_income:
+    st.write("Secondary incomes are cut in Frugal Mode years.")
+if frugal_discretionary_only:
+    st.write("Only discretionary expenses reduced in Frugal Mode years.")
+
+if dynamic_contrib:
+    st.write(f"Dynamic Retirement Contribution Growth: {contrib_growth_pct}% per year")
+else:
+    st.write("Dynamic Retirement Contribution Growth: Disabled")
+
+st.write(f"Vacancy + Maintenance Loss on Rentals: {vacancy_pct}%")
+if rental2_on:
+    st.write(f"Rental #2: Starts Year {rental2_start}, Monthly Net: ${rental2_monthly_net}")
+if add_new_rental:
+    st.write(f"Rental #3: Starts Year {new_rental_year}, Down Payment: ${new_rental_cost}, Funded via: {new_rental_funding}")
+    if new_rental_funding != "Cash":
+        st.write(f"Rental #3 HELOC: {new_heloc_rate}% interest, {new_heloc_term} yrs, starts Year {new_heloc_start_year}")
+
+st.write(f"HELOC on Primary Home: ${heloc_used} at {heloc_rate}%, {heloc_term} yrs, starts Year {heloc_start_year}")
+
+if cody_raise_on:
+    st.write(f"Cody Primary Raise: {cody_raise_pct}% per year")
+if cody_secondary_raise_on:
+    st.write(f"Cody Secondary Raise: {cody_secondary_raise_pct}% per year")
+if lauren_raise_on:
+    st.write(f"Lauren Primary Raise: {lauren_raise_pct}% per year")
+if lauren_secondary_raise_on:
+    st.write(f"Lauren Secondary Raise: {lauren_secondary_raise_pct}% per year")
+
+if income_drop:
+    st.write("10% Income Drop Scenario: Enabled")
+st.write(f"Emergency Fund Target: ${emergency_fund}")
+
