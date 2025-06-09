@@ -3,138 +3,149 @@ import pandas as pd
 import matplotlib.pyplot as plt
 
 st.set_page_config(page_title="Financial Freedom Timeline Planner", layout="wide")
+
 st.title("📈 Financial Freedom Timeline Planner")
 
 # --- Income Inputs ---
 st.header("Income Sources")
 col1, col2 = st.columns(2)
 with col1:
-    cody_primary   = st.number_input("Cody’s Primary Income (Annual)", value=90000)
+    cody_primary = st.number_input("Cody’s Primary Income (Annual)", value=90000)
     cody_secondary = st.number_input("Cody’s Secondary Income (Annual)", value=5000)
 with col2:
-    lauren_primary   = st.number_input("Lauren’s Primary Income (Annual)", value=75000)
+    lauren_primary = st.number_input("Lauren’s Primary Income (Annual)", value=75000)
     lauren_secondary = st.number_input("Lauren’s Secondary Income (Annual)", value=0)
 
 # --- Rental Property Inputs ---
 st.header("🏠 Rental Properties")
-r1_rent     = st.number_input("Rental 1: Monthly Rent", value=2200)
-r1_mortgage = st.number_input("Rental 1: Monthly Mortgage", value=1500)
-r1_start    = st.number_input("Rental 1 Start Year", value=1)
+rental1_monthly = st.number_input("Rental 1: Monthly Rent", value=2200)
+rental1_mortgage = st.number_input("Rental 1: Monthly Mortgage", value=1500)
+rental1_start = st.number_input("Rental 1 Start Year", value=1)
 
-r2_rent     = st.number_input("Rental 2: Monthly Rent", value=2200)
-r2_mortgage = st.number_input("Rental 2: Monthly Mortgage", value=1600)
-r2_start    = st.number_input("Rental 2 Start Year", value=5)
+rental2_monthly = st.number_input("Rental 2: Monthly Rent", value=2200)
+rental2_mortgage = st.number_input("Rental 2: Monthly Mortgage", value=1600)
+rental2_start = st.number_input("Rental 2 Start Year", value=5)
 
 # --- Expense Assumptions ---
 st.header("📉 Expenses and Assumptions")
-base_expenses     = st.number_input("Annual Living Expenses (Starting)", value=75000)
-expense_inflation = st.slider("Annual Expense Inflation Rate (%)", 0.0, 10.0, 3.0)
+base_expenses = st.number_input("Annual Living Expenses (Starting)", value=75000)
+expense_inflation = st.slider("Annual Expense Inflation Rate (%)", min_value=0.0, max_value=10.0, value=3.0)
 
-# --- Home Loan / HELOC Inputs ---
-st.header("🏡 Home Loan & HELOC")
+# --- Loan Inputs ---
+st.header("🏡 Home Loan and HELOC")
 home_loan_amount = st.number_input("New Home Loan Amount", value=510000)
-heloc_amount     = st.number_input("HELOC Amount (if used)", value=0)
-heloc_start      = st.number_input("HELOC Repayment Start Year", value=2)
-heloc_term       = st.number_input("HELOC Term (Years)", value=5)
+heloc_amount = st.number_input("HELOC Amount (if used)", value=0)
+heloc_start = st.number_input("HELOC Repayment Start Year", value=2)
+heloc_term_years = st.number_input("HELOC Term (Years)", value=5)
 
-# --- Effort Mode Toggle ---
+# --- Retirement/IRA ---
+st.header("💼 Retirement Investments")
+retirement_start = st.number_input("Current Retirement Balance", value=80000)
+retirement_contribution = st.number_input("Annual Contributions", value=12000)
+retirement_growth = st.slider("Annual Growth Rate (%)", 0.0, 10.0, 7.0)
+
+# --- Push-Hard Toggle ---
 st.header("💪 Effort Mode")
-push_hard        = st.toggle("Push-Hard Upfront Mode")  # or st.checkbox if preferred
+push_hard = st.toggle("Push-Hard Upfront Mode")
 push_income_boost = 10000 if push_hard else 0
 
-# --- Retirement Account Simulation ---
-st.header("💼 Retirement Accounts")
-cody_ret_initial   = st.number_input("Cody’s Initial Retirement Balance",   value=50000)
-lauren_ret_initial = st.number_input("Lauren’s Initial Retirement Balance", value=50000)
-retirement_growth  = st.slider("Annual Retirement Growth Rate (%)", 0.0, 15.0, 7.0)
-
-# --- Run 20-Year Simulation ---
-st.header("📊 20-Year Projection Data")
+# --- Simulation ---
+st.header("📊 20-Year Financial Projection")
 years = list(range(1, 21))
-net_cash_flows = []
+cash_flow = []
 cumulative_savings = []
-ret_balances = []
+retirement_balance = []
+home_equity = []
+rental_equity = []
+net_worth = []
 flags = []
+advice = []
 
-# initialize retirement balance
-ret_balance = cody_ret_initial + lauren_ret_initial
+retirement = retirement_start
+savings = 0
+home_value = home_loan_amount
+home_loan = home_loan_amount
 
 for year in years:
-    # income
+    # --- Income Calculation ---
     income = (
         cody_primary + lauren_primary +
         cody_secondary + lauren_secondary +
         push_income_boost * (1 if year <= 2 else 0)
     )
-    # rental cash flow
-    rental_cf = 0
-    if year >= r1_start:
-        rental_cf += (r1_rent - r1_mortgage) * 12
-    if year >= r2_start:
-        rental_cf += (r2_rent - r2_mortgage) * 12
-    income += rental_cf
 
-    # expenses & HELoC payment
+    # --- Rental Income ---
+    rental_net = 0
+    rental_eq = 0
+    if year >= rental1_start:
+        rental_net += (rental1_monthly - rental1_mortgage) * 12
+        rental_eq += rental1_mortgage * 12 * (year - rental1_start + 1)
+    if year >= rental2_start:
+        rental_net += (rental2_monthly - rental2_mortgage) * 12
+        rental_eq += rental2_mortgage * 12 * (year - rental2_start + 1)
+    income += rental_net
+
+    # --- Expense Calculation ---
     expenses = base_expenses * ((1 + expense_inflation / 100) ** (year - 1))
-    heloc_payment = (heloc_amount / heloc_term) if year >= heloc_start and heloc_amount > 0 else 0
+    heloc_payment = (heloc_amount / heloc_term_years) if year >= heloc_start and heloc_amount > 0 else 0
+    net = income - expenses - heloc_payment
 
-    # net cash flow
-    net_cf = income - expenses - heloc_payment
-    net_cash_flows.append(net_cf)
+    # --- Retirement & Savings ---
+    retirement = retirement * (1 + retirement_growth / 100) + retirement_contribution
+    savings += max(net, 0)
 
-    # cumulative savings
-    cum_sav = net_cf if year == 1 else cumulative_savings[-1] + net_cf
-    cumulative_savings.append(cum_sav)
+    # --- Equity & Net Worth ---
+    home_eq = (home_loan_amount / 30) * 12 * year
+    networth = savings + home_eq + rental_eq + retirement
 
-    # retirement growth
-    ret_balance = ret_balance * (1 + retirement_growth/100)
-    ret_balances.append(ret_balance)
-
-    # flag: red if negative; yellow if small positive; green otherwise
-    if net_cf < 0:
-        flags.append("🔴")
-    elif net_cf < base_expenses * 0.1:
-        flags.append("🟡")
+    # --- Risk Flagging ---
+    if net < 0:
+        flag = "🔴"
+    elif net < 10000:
+        flag = "🟡"
     else:
-        flags.append("🟢")
+        flag = "🟢"
 
-# assemble DataFrame
+    # --- Strategy Advice ---
+    suggest = ""
+    if net > 15000 and year >= 5:
+        suggest = "📌 Consider adding rental property"
+    elif net < 0:
+        suggest = "⚠️ Review expenses or income"
+    elif year == 10 and retirement < 250000:
+        suggest = "💡 Consider increasing retirement savings"
+    else:
+        suggest = ""
+
+    # --- Append Data ---
+    cash_flow.append(net)
+    cumulative_savings.append(savings)
+    retirement_balance.append(retirement)
+    home_equity.append(home_eq)
+    rental_equity.append(rental_eq)
+    net_worth.append(networth)
+    flags.append(flag)
+    advice.append(suggest)
+
+# --- DataFrame & Display ---
 df = pd.DataFrame({
     "Year": years,
-    "Net Cash Flow": net_cash_flows,
+    "Net Cash Flow": cash_flow,
     "Cumulative Savings": cumulative_savings,
-    "Retirement Balance": ret_balances,
+    "Retirement Balance": retirement_balance,
+    "Home Equity": home_equity,
+    "Rental Equity": rental_equity,
+    "Net Worth": net_worth,
+    "Risk": flags,
+    "Advice": advice
 })
-df["Net Worth"] = df["Cumulative Savings"] + df["Retirement Balance"]
-df["Flag"] = flags
 
-# --- Charts & Tables ---
-st.subheader("Net Cash Flow, Savings & Net Worth Over Time")
-st.line_chart(df.set_index("Year")[["Net Cash Flow", "Cumulative Savings", "Net Worth"]])
+st.line_chart(df.set_index("Year")[["Net Cash Flow", "Net Worth"]])
+st.dataframe(df)
 
-st.subheader("🚦 Cash-Flow Flags by Year")
-st.table(df[["Year", "Net Cash Flow", "Flag"]])
+# --- Summary ---
+st.subheader("📌 Key Assumptions Summary")
+st.write(f"Expense Inflation: {expense_inflation:.1f}%, HELOC: ${heloc_amount} over {heloc_term_years} years")
+st.write(f"Push-Hard Mode: {'Enabled' if push_hard else 'Disabled'}, Boost: ${push_income_boost}/yr")
+st.write(f"Retirement Growth: {retirement_growth:.1f}%, Annual Contribution: ${retirement_contribution}")
 
-# --- Assumption Recap ---
-st.subheader("📌 Assumptions Summary")
-st.write(f"- Base Expenses: ${base_expenses:,.0f}; Inflation: {expense_inflation:.1f}%/yr")
-st.write(f"- Push-Hard Mode: {'Enabled' if push_hard else 'Disabled'} (Boost of ${push_income_boost}/yr for Years 1–2)")
-st.write(f"- Rental Starts: R1 in Year {r1_start}, R2 in Year {r2_start}")
-st.write(f"- Heloc: ${heloc_amount:,.0f} over {heloc_term} yrs, payments begin Year {heloc_start}")
-st.write(f"- Retirement Growth Rate: {retirement_growth:.1f}% on initial combined balance of ${cody_ret_initial + lauren_ret_initial:,.0f}")
-
-# --- Strategy Recommendations ---
-st.subheader("🔍 Strategy Recommendations")
-positive_years = df.loc[df["Net Cash Flow"] > 0, "Year"]
-neg_years = df.loc[df["Net Cash Flow"] < 0, "Year"].tolist()
-
-if not positive_years.empty:
-    first_pos = int(positive_years.iloc[0])
-    st.write(f"- 🟢 Your net cash flow first turns positive in **Year {first_pos}**. "
-             "Consider that milestone a potential window to acquire another rental property or boost investments.")
-else:
-    st.write("- ⚠️ Your cash flow remains negative through Year 20—consider tightening expenses or reevaluating financing.")
-
-if neg_years:
-    st.write(f"- 🔴 Years with negative cash flow: {neg_years}. "
-             "During these periods, prioritize expense control and avoid new leverage.")
