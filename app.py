@@ -6,7 +6,6 @@ st.set_page_config(page_title="Financial Freedom Timeline Planner", layout="wide
 
 st.title("📈 Financial Freedom Timeline Planner")
 
-# --- Mortgage Payment Helper ---
 def calc_pmt(rate, nper, pv):
     if rate == 0:
         return pv / nper
@@ -34,10 +33,14 @@ st.header("👨‍👩‍👧 Income Sources")
 col1, col2 = st.columns(2)
 with col1:
     cody_primary = st.number_input("Cody's Primary Income (annual)", value=90000)
+    cody_primary_raise = st.slider("Cody Primary Raise %", 0.0, 10.0, 2.0)
     cody_secondary = st.number_input("Cody's Secondary Income (annual)", value=5000)
+    cody_secondary_raise = st.slider("Cody Secondary Raise %", 0.0, 10.0, 0.0)
 with col2:
     lauren_primary = st.number_input("Lauren's Primary Income (annual)", value=75000)
+    lauren_primary_raise = st.slider("Lauren Primary Raise %", 0.0, 10.0, 2.0)
     lauren_secondary = st.number_input("Lauren's Secondary Income (annual)", value=0)
+    lauren_secondary_raise = st.slider("Lauren Secondary Raise %", 0.0, 10.0, 0.0)
 
 # --- RENTAL INPUTS ---
 st.header("🏠 Rental Properties (Net Monthly Rent - Mortgage)")
@@ -69,8 +72,17 @@ col1, col2 = st.columns(2)
 with col1:
     retirement_start = st.number_input("Current Retirement Balance", value=80000)
     retirement_contribution = st.number_input("Annual Contributions", value=12000)
+    retirement_raise = st.slider("Retirement Contribution Raise %", 0.0, 10.0, 0.0)
 with col2:
     retirement_growth = st.slider("Annual Growth Rate (%)", 0.0, 10.0, 7.0)
+
+# --- FRUGAL MODE ---
+st.header("🛑 Frugal Mode")
+frugal_mode = st.checkbox("Activate Frugal Mode")
+frugal_start = st.number_input("Frugal Mode Start Year", value=1) if frugal_mode else None
+frugal_end = st.number_input("Frugal Mode End Year", value=2) if frugal_mode else None
+frugal_cut = st.slider("Frugal Mode Expense Cut (%)", 0, 50, 15) if frugal_mode else 0
+frugal_pause_ret = st.checkbox("Pause Retirement Contributions in Frugal Mode") if frugal_mode else False
 
 # --- STUDENT LOAN ---
 st.header("🎓 Student Loan")
@@ -94,9 +106,7 @@ years = list(range(1, 21))
 df = pd.DataFrame({"Year": years})
 
 # --- SIMULATION LOOP ---
-mortgage = home_loan
 mortgage_payment = calc_pmt(mortgage_rate/100/12, mortgage_years*12, home_loan)
-heloc_bal = heloc_used
 heloc_annual_payment = (heloc_used / heloc_term) if heloc_used > 0 else 0
 student_loan_bal = student_loan_balance
 retirement = retirement_start
@@ -107,11 +117,22 @@ rental2_equity = 0
 networths, cash_flows, cumulative_savings, risk_flags, advice_list = [], [], [], [], []
 retirement_balances, home_equities, rental_equities = [], [], []
 
+# --- For raises ---
+cody_p, cody_s = cody_primary, cody_secondary
+lauren_p, lauren_s = lauren_primary, lauren_secondary
+ret_contrib = retirement_contribution
+
 for y in years:
+    # Raises applied yearly
+    if y > 1:
+        cody_p *= (1 + cody_primary_raise / 100)
+        cody_s *= (1 + cody_secondary_raise / 100)
+        lauren_p *= (1 + lauren_primary_raise / 100)
+        lauren_s *= (1 + lauren_secondary_raise / 100)
+        ret_contrib *= (1 + retirement_raise / 100)
     # --- Incomes ---
     income = (
-        cody_primary + lauren_primary +
-        cody_secondary + lauren_secondary +
+        cody_p + lauren_p + cody_s + lauren_s +
         push_income_boost * (1 if y <= 2 else 0)
     )
     if income_drop:
@@ -121,14 +142,23 @@ for y in years:
     rental_income = 0
     if y >= rental1_start:
         rental_income += rental1_monthly_net * 12
-        rental1_equity += (rental1_monthly_net * 12) * 0.3  # simplistic, user can refine
+        rental1_equity += (rental1_monthly_net * 12) * 0.3
     if rental2_on and y >= rental2_start:
         rental_income += rental2_monthly_net * 12
-        rental2_equity += (rental2_monthly_net * 12) * 0.3  # simplistic, user can refine
+        rental2_equity += (rental2_monthly_net * 12) * 0.3
 
     # --- Expenses ---
     exp_infl = expense_inflation + (5 if stress_test else 0)
     expenses = base_expenses * ((1 + exp_infl/100) ** (y-1))
+    # Apply Frugal Mode if active this year
+    if frugal_mode and frugal_start <= y <= frugal_end:
+        expenses *= (1 - frugal_cut/100)
+        if frugal_pause_ret:
+            ret_contrib_this_year = 0
+        else:
+            ret_contrib_this_year = ret_contrib
+    else:
+        ret_contrib_this_year = ret_contrib
 
     # --- Loan & Debt ---
     mortg = mortgage_payment * 12 if y >= mortgage_start_year else 0
@@ -142,10 +172,10 @@ for y in years:
         student_loan_bal = 0
 
     # --- Retirement Growth ---
-    retirement = retirement * (1 + retirement_growth/100) + retirement_contribution
+    retirement = retirement * (1 + retirement_growth/100) + ret_contrib_this_year
 
     # --- Equity Tracking ---
-    home_equity = min(home_value, home_equity + mortg)  # Not perfect but tracks payoff
+    home_equity = min(home_value, home_equity + mortg)
     rental1_equity *= (1 + rental1_appreciation / 100)
     rental2_equity *= (1 + rental2_appreciation / 100) if rental2_on else 0
 
@@ -177,7 +207,6 @@ for y in years:
     risk_flags.append(risk)
     advice_list.append(advice)
 
-# --- DataFrame ---
 df["Net Cash Flow"] = cash_flows
 df["Cumulative Savings"] = cumulative_savings
 df["Retirement Balance"] = retirement_balances
@@ -201,7 +230,7 @@ st.subheader("📌 Assumptions & Strategic Summary")
 st.write(f"Base Expenses: ${base_expenses:,.0f}, Inflation: {expense_inflation:.1f}%{' (+5%)' if stress_test else ''}")
 st.write(f"Push-Hard Mode: {'Enabled' if push_hard else 'Disabled'}, Boost: ${push_income_boost}/yr (Years 1–2)")
 st.write(f"Home Loan: ${home_loan:,.0f} at {mortgage_rate:.2f}%, Term: {mortgage_years} yrs, Start Year: {mortgage_start_year}")
-st.write(f"Retirement Growth: {retirement_growth:.1f}%, Annual Contribution: ${retirement_contribution:,.0f}")
+st.write(f"Retirement Growth: {retirement_growth:.1f}%, Annual Contribution: ${retirement_contribution:,.0f} (+{retirement_raise:.1f}%/yr)")
 st.write(f"Student Loan: ${student_loan_balance:,.0f} at {student_loan_rate:.2f}% for {student_loan_term} yrs{' (forgiveness enabled)' if forgiveness_toggle else ''}")
 
 st.success("See year-by-year risk flags and suggestions above to decide when to add rentals, pay down debt, or increase investments.")
