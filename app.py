@@ -224,6 +224,7 @@ st.dataframe(df.style.applymap(
 # --- Segment Trends Chart ---
 st.subheader("💵 Trend: Savings, Retirement, Equity, and Net Worth Over Time")
 trend_df = df.set_index("Year")[["Cumulative Savings", "Retirement Balance", "Home Equity", "Rental Equity", "Net Worth"]]
+trend_df.columns = ["Savings", "Retirement", "Home Eq", "Rent Eq", "Net Worth"]  # Short labels for wrapping
 st.line_chart(trend_df)
 
 st.subheader("📌 Assumptions & Strategic Summary")
