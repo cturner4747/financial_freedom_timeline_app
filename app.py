@@ -59,7 +59,11 @@ with col2:
 st.header("📉 Expense Assumptions")
 col1, col2 = st.columns(2)
 with col1:
-    base_expenses = st.number_input("Annual Living Expenses (starting)", value=100000)
+    base_expenses = st.number_input(
+    "Annual Living Expenses (starting)",
+    value=75000,
+    help="Exclude your primary mortgage payment from this amount; the mortgage is entered separately below."
+)
     expense_inflation = st.slider("Annual Expense Inflation (%)", 0.0, 10.0, 3.0)
     stress_test = st.checkbox("Add +5% Stress-Test Inflation?")
 with col2:
