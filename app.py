@@ -19,7 +19,7 @@ with col1:
     home_loan = st.number_input("Home Loan Amount", value=510000)
     mortgage_rate = st.number_input("Mortgage Interest Rate (%)", value=6.5)
 with col2:
-    down_payment = st.number_input("Down Payment", value=100000)
+    down_payment = st.number_input("Down Payment", value=150000)
     mortgage_years = st.number_input("Mortgage Term (years)", value=30)
     mortgage_start_year = st.number_input("Mortgage Start Year", value=1)
 with col3:
