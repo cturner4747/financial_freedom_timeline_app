@@ -32,7 +32,7 @@ with col3:
 st.header("👨‍👩‍👧 Income Sources")
 col1, col2 = st.columns(2)
 with col1:
-    cody_primary = st.number_input("Cody's Primary Income (annual)", value=90000)
+    cody_primary = st.number_input("Cody's Primary Income (annual)", value=134000)
     cody_primary_raise = st.slider("Cody Primary Raise %", 0.0, 10.0, 2.0)
     cody_secondary = st.number_input("Cody's Secondary Income (annual)", value=5000)
     cody_secondary_raise = st.slider("Cody Secondary Raise %", 0.0, 10.0, 0.0)
@@ -59,7 +59,7 @@ with col2:
 st.header("📉 Expense Assumptions")
 col1, col2 = st.columns(2)
 with col1:
-    base_expenses = st.number_input("Annual Living Expenses (starting)", value=75000)
+    base_expenses = st.number_input("Annual Living Expenses (starting)", value=100000)
     expense_inflation = st.slider("Annual Expense Inflation (%)", 0.0, 10.0, 3.0)
     stress_test = st.checkbox("Add +5% Stress-Test Inflation?")
 with col2:
@@ -70,8 +70,8 @@ with col2:
 st.header("💼 Retirement Investments")
 col1, col2 = st.columns(2)
 with col1:
-    retirement_start = st.number_input("Current Retirement Balance", value=80000)
-    retirement_contribution = st.number_input("Annual Contributions", value=12000)
+    retirement_start = st.number_input("Current Retirement Balance", value=34000)
+    retirement_contribution = st.number_input("Annual Contributions", value=4000)
     retirement_raise = st.slider("Retirement Contribution Raise %", 0.0, 10.0, 0.0)
 with col2:
     retirement_growth = st.slider("Annual Growth Rate (%)", 0.0, 10.0, 7.0)
@@ -88,10 +88,10 @@ frugal_pause_ret = st.checkbox("Pause Retirement Contributions in Frugal Mode") 
 st.header("🎓 Student Loan")
 col1, col2, col3 = st.columns(3)
 with col1:
-    student_loan_balance = st.number_input("Student Loan Starting Balance", value=160000)
+    student_loan_balance = st.number_input("Student Loan Starting Balance", value=232000)
     student_loan_rate = st.number_input("Student Loan Interest Rate (%)", value=6.8)
 with col2:
-    student_loan_payment = st.number_input("Monthly Payment", value=650)
+    student_loan_payment = st.number_input("Monthly Payment", value=1400)
     student_loan_term = st.number_input("Student Loan Payment Duration (years)", value=20)
 with col3:
     forgiveness_toggle = st.checkbox("Enable Loan Forgiveness?")
