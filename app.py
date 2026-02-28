@@ -32,9 +32,6 @@ def mortgage_balance(principal: float, annual_rate: float, years: int, months_pa
     bal = principal * (1 + r) ** m - pmt * (((1 + r) ** m - 1) / r)
     return max(0.0, bal)
 
-def clamp(x, lo, hi):
-    return max(lo, min(hi, x))
-
 # -----------------------------
 # Sidebar: Global settings + Modes
 # -----------------------------
@@ -44,7 +41,7 @@ with st.sidebar:
     years = np.arange(0, horizon_years + 1)
 
     st.divider()
-    st.header("Modes (like your original model)")
+    st.header("Modes")
 
     push_hard = st.checkbox("Push-Hard Upfront", value=False)
     if push_hard:
@@ -79,20 +76,41 @@ with st.sidebar:
     reinvest_surplus = st.checkbox("Reinvest annual surplus into investable cash", value=True)
 
 # -----------------------------
-# Personal / household cash flow
+# Income (separate for you + wife)
 # -----------------------------
-st.subheader("Personal / Household Cash Flow (annual)")
+st.subheader("Household Income (separate)")
 
-c1, c2, c3, c4 = st.columns(4)
-with c1:
-    primary_income = st.number_input("Primary annual income", 0, 700000, 140000, step=1000)
-with c2:
-    secondary_income = st.number_input("Secondary annual income", 0, 500000, 30000, step=1000)
-with c3:
+ic1, ic2, ic3, ic4 = st.columns(4)
+with ic1:
+    cody_income0 = st.number_input("Cody income (Year 0, annual)", 0, 1000000, 140000, step=1000)
+with ic2:
+    lauren_income0 = st.number_input("Lauren income (Year 0, annual)", 0, 1000000, 30000, step=1000)
+with ic3:
+    cody_growth = st.slider("Cody income growth (%/yr)", 0.0, 15.0, 2.5, 0.1)
+with ic4:
+    lauren_growth = st.slider("Lauren income growth (%/yr)", 0.0, 15.0, 2.5, 0.1)
+
+ic5, ic6, ic7, ic8 = st.columns(4)
+with ic5:
+    cody_income_start = st.number_input("Cody income starts in year", 0, 40, 0)
+with ic6:
+    lauren_income_start = st.number_input("Lauren income starts in year", 0, 40, 0)
+with ic7:
+    other_income0 = st.number_input("Other household income (Year 0, annual)", 0, 1000000, 0, step=1000)
+with ic8:
+    other_income_growth = st.slider("Other income growth (%/yr)", 0.0, 15.0, 0.0, 0.1)
+
+st.subheader("Household Expenses (annual)")
+e1, e2 = st.columns(2)
+with e1:
     base_living_expenses = st.number_input("Core annual expenses (non-property)", 0, 600000, 90000, step=1000)
-with c4:
-    income_growth = st.slider("Income growth (%/yr)", 0.0, 10.0, 2.5, 0.1)
+with e2:
+    # Optional inflation knob if you want it; set to 0 if you don't
+    expense_growth = st.slider("Expense growth / inflation (%/yr)", 0.0, 10.0, 0.0, 0.1)
 
+# -----------------------------
+# Student Loans
+# -----------------------------
 st.subheader("Student Loans (simple but tracked over time)")
 sl1, sl2, sl3 = st.columns(3)
 with sl1:
@@ -139,10 +157,22 @@ for i in range(max_props):
         # Existing property mode
         ex1, ex2, ex3 = st.columns(3)
         is_existing = ex1.checkbox("Existing at Year 0 (already owned)", value=(i == 0), key=f"p_exist_{i}")
-        existing_value = ex2.number_input("Current market value (Year 0)", 0, 5000000, 292000 if i == 0 else 200000,
-                                          step=1000, key=f"p_exist_val_{i}", disabled=not is_existing)
-        existing_mort_balance = ex3.number_input("Current mortgage balance (Year 0)", 0, 5000000, 232000 if i == 0 else 160000,
-                                                 step=1000, key=f"p_exist_mort_{i}", disabled=not is_existing)
+        existing_value = ex2.number_input(
+            "Current market value (Year 0)",
+            0, 5000000,
+            292000 if i == 0 else 200000,
+            step=1000,
+            key=f"p_exist_val_{i}",
+            disabled=not is_existing
+        )
+        existing_mort_balance = ex3.number_input(
+            "Current mortgage balance (Year 0)",
+            0, 5000000,
+            232000 if i == 0 else 160000,
+            step=1000,
+            key=f"p_exist_mort_{i}",
+            disabled=not is_existing
+        )
 
         # Force purchase year = 0 for existing assets
         if is_existing:
@@ -184,7 +214,7 @@ for i in range(max_props):
         pm_pct = r11.slider("PM fee (% of rent)", 0.0, 25.0, 10.0, 0.5, key=f"p_pm_{i}") if pm_enabled else 0.0
         value_growth = r12.slider("Home value growth (%/yr)", -5.0, 15.0, 3.0, 0.1, key=f"p_grow_{i}")
 
-        # Optional: delayed rent start (useful if you convert it later)
+        # Rent start + rent growth
         rs1, rs2 = st.columns(2)
         rent_start_year = rs1.number_input("Rent starts in year", 0, horizon_years, int(purchase_year), key=f"p_rent_start_{i}")
         rent_growth = rs2.slider("Rent growth (%/yr)", -5.0, 15.0, 2.0, 0.1, key=f"p_rent_grow_{i}")
@@ -203,17 +233,14 @@ for i in range(max_props):
                 "liquidation_year": int(liquidation_year),
                 "is_existing": bool(is_existing),
 
-                # Value / basis
                 "value_year0": float(existing_value) if is_existing else float(purchase_price),
                 "purchase_price": float(existing_value) if is_existing else float(purchase_price),
 
-                # Mortgage start balance differs if existing
                 "down_pct": float(down_pct),
                 "mortgage_rate": float(mortgage_rate) / 100.0,
                 "term_years": int(term_years),
                 "mortgage_balance_year0": float(existing_mort_balance) if is_existing else None,
 
-                # Operations
                 "gross_rent_month": float(gross_rent_month),
                 "tax_ins_month": float(tax_ins_month),
                 "maintenance_pct": float(maintenance_pct) / 100.0,
@@ -225,7 +252,6 @@ for i in range(max_props):
                 "rent_start_year": int(rent_start_year),
                 "rent_growth": float(rent_growth) / 100.0,
 
-                # HELOC
                 "heloc_enabled": bool(heloc_enabled),
                 "heloc_cltv": float(heloc_cltv) / 100.0 if heloc_enabled else 0.0,
                 "heloc_draw_year": int(heloc_draw_year) if heloc_enabled else 0,
@@ -259,17 +285,32 @@ def student_loan_remaining(year: int) -> float:
     return float(max(0.0, student_loan_balance0 - paid))
 
 # -----------------------------
+# Income model (separate earners)
+# -----------------------------
+def income_stream(base: float, growth_pct: float, year: int, start_year: int) -> float:
+    if year < start_year:
+        return 0.0
+    t = year - start_year
+    return float(base * ((1 + growth_pct / 100.0) ** t))
+
+# -----------------------------
 # Run simulation
 # -----------------------------
 rows = []
 cash = float(starting_cash)
 
 for y in years:
-    # Base household income/expense with growth
-    base_income_y = (primary_income + secondary_income) * ((1 + income_growth / 100.0) ** y)
-    base_expenses_y = float(base_living_expenses)
+    # Separate incomes (your request)
+    cody_income_y = income_stream(cody_income0, cody_growth, int(y), int(cody_income_start))
+    lauren_income_y = income_stream(lauren_income0, lauren_growth, int(y), int(lauren_income_start))
+    other_income_y = income_stream(other_income0, other_income_growth, int(y), 0)
 
-    # Push-hard adjustments (like your original toggle)
+    base_income_y = cody_income_y + lauren_income_y + other_income_y
+
+    # Expenses (optional inflation)
+    base_expenses_y = float(base_living_expenses) * ((1 + expense_growth / 100.0) ** int(y))
+
+    # Push-hard adjustments
     extra_income_y = float(push_extra_income) if (push_hard and y < push_years) else 0.0
     extra_cost_y = float(push_extra_cost) if (push_hard and y < push_years) else 0.0
 
@@ -280,7 +321,7 @@ for y in years:
     income_y = base_income_y + extra_income_y
     expenses_y = base_expenses_y + extra_cost_y
 
-    sl_pay_y = student_loan_annual_payment if y >= student_loan_start_year and student_loan_remaining(y) > 0 else 0.0
+    sl_pay_y = student_loan_annual_payment if (y >= student_loan_start_year and student_loan_remaining(int(y)) > 0) else 0.0
 
     rental_cf_y = 0.0
     total_equity = 0.0
@@ -289,13 +330,10 @@ for y in years:
     acquired_props = 0
     liquidated_props = 0
     heloc_drawn_total = 0.0
-
-    # Track total property values too (optional for reporting)
     total_property_value = 0.0
 
     for idx, p in enumerate(properties):
         stt = prop_state[idx]
-
         if y < p["purchase_year"]:
             continue
         if not stt["active"]:
@@ -310,11 +348,9 @@ for y in years:
         yrs_held = y - p["purchase_year"]
         months_paid = int(yrs_held * 12)
 
-        # Value trajectory
         home_value = p["value_year0"] * ((1 + p["value_growth"]) ** yrs_held)
         total_property_value += home_value
 
-        # Mortgage balance
         mort_bal = mortgage_balance(
             principal=stt["loan_principal"],
             annual_rate=p["mortgage_rate"],
@@ -339,18 +375,15 @@ for y in years:
         else:
             gross_rent_annual = 0.0
 
-        # Operating costs (proportional to rent where applicable)
         pm_annual = p["pm_pct"] * gross_rent_annual
         maint_annual = p["maintenance_pct"] * gross_rent_annual
         vacancy_annual = p["vacancy_pct"] * gross_rent_annual
         capex_annual = p["capex_pct"] * gross_rent_annual
-        tax_ins_annual = 12 * p["tax_ins_month"]  # treated as flat
+        tax_ins_annual = 12 * p["tax_ins_month"]
 
-        # Debt service (payment based on starting principal; accurate enough for yearly sims)
         pmt_month = amort_payment(stt["loan_principal"], p["mortgage_rate"], p["term_years"])
-        debt_service_annual = 12 * pmt_month if (y >= p["purchase_year"]) else 0.0
+        debt_service_annual = 12 * pmt_month
 
-        # HELOC interest
         heloc_interest_annual = stt["heloc_balance"] * (heloc_rate / 100.0)
 
         net_prop = gross_rent_annual - (
@@ -358,7 +391,6 @@ for y in years:
         )
         rental_cf_y += net_prop
 
-        # Equity snapshot (already net of mortgage + heloc)
         equity = home_value - mort_bal - stt["heloc_balance"]
         total_equity += equity
         total_heloc += stt["heloc_balance"]
@@ -371,14 +403,10 @@ for y in years:
             stt["active"] = False
             liquidated_props += 1
 
-    # Net cash flow and cash update
     net_cash_flow_y = income_y - expenses_y - sl_pay_y + rental_cf_y
     if reinvest_surplus:
         cash += net_cash_flow_y
 
-    # Net worth (simple, intuitive, useful):
-    #   Net Worth = Investable Cash + Total Equity (properties) - Remaining Student Loans
-    # Equity already accounts for mortgages/HELOCs.
     sl_remaining = student_loan_remaining(int(y))
     net_worth = cash + total_equity - sl_remaining
 
@@ -386,21 +414,32 @@ for y in years:
 
     rows.append({
         "Year": int(y),
-        "Income": round(income_y, 2),
+
+        "Cody Income": round(cody_income_y, 2),
+        "Lauren Income": round(lauren_income_y, 2),
+        "Other Income": round(other_income_y, 2),
+
+        "Income (Total)": round(income_y, 2),
         "Expenses": round(expenses_y, 2),
+
         "Student Loan Pay": round(sl_pay_y, 2),
         "Student Loan Remaining": round(sl_remaining, 2),
+
         "Rental Cash Flow": round(rental_cf_y, 2),
         "Net Cash Flow": round(net_cash_flow_y, 2),
+
         "Investable Cash": round(cash, 2),
         "Total Property Value (active)": round(total_property_value, 2),
         "Total Equity (active)": round(total_equity, 2),
         "HELOC Outstanding": round(total_heloc, 2),
+
         "Net Worth": round(net_worth, 2),
+
         "Active Properties": int(active_props),
         "Acquired This Year": int(acquired_props),
         "Liquidated This Year": int(liquidated_props),
         "HELOC Drawn This Year": round(heloc_drawn_total, 2),
+
         "Status": status
     })
 
@@ -437,36 +476,46 @@ ax2.set_ylabel("Dollars")
 ax2.set_title("Net Worth Over Time (Cash + Equity - Student Loans)")
 st.pyplot(fig2)
 
-# Active properties chart
+# Income breakdown chart
 fig3, ax3 = plt.subplots()
-ax3.plot(df["Year"], df["Active Properties"], linewidth=2)
+ax3.plot(df["Year"], df["Cody Income"], linewidth=2)
+ax3.plot(df["Year"], df["Lauren Income"], linewidth=2)
+ax3.plot(df["Year"], df["Other Income"], linewidth=2)
 ax3.set_xlabel("Year")
-ax3.set_ylabel("Count")
-ax3.set_title("Active Properties Over Time")
+ax3.set_ylabel("Dollars")
+ax3.set_title("Income Breakdown Over Time")
+ax3.legend(["Cody", "Lauren", "Other"])
 st.pyplot(fig3)
 
-# Cash vs equity chart
+# Active properties chart
 fig4, ax4 = plt.subplots()
-ax4.plot(df["Year"], df["Investable Cash"], linewidth=2)
-ax4.plot(df["Year"], df["Total Equity (active)"], linewidth=2)
+ax4.plot(df["Year"], df["Active Properties"], linewidth=2)
 ax4.set_xlabel("Year")
-ax4.set_ylabel("Dollars")
-ax4.set_title("Cash vs Equity (Active Properties)")
-ax4.legend(["Investable Cash", "Total Equity"])
+ax4.set_ylabel("Count")
+ax4.set_title("Active Properties Over Time")
 st.pyplot(fig4)
+
+# Cash vs equity chart
+fig5, ax5 = plt.subplots()
+ax5.plot(df["Year"], df["Investable Cash"], linewidth=2)
+ax5.plot(df["Year"], df["Total Equity (active)"], linewidth=2)
+ax5.set_xlabel("Year")
+ax5.set_ylabel("Dollars")
+ax5.set_title("Cash vs Equity (Active Properties)")
+ax5.legend(["Investable Cash", "Total Equity"])
+st.pyplot(fig5)
 
 st.dataframe(df, use_container_width=True)
 
 with st.expander("Notes / simplifications"):
     st.markdown(
         """
-- **Push-Hard Upfront**: Adds optional extra income + extra cost for the first N years.
-- **Frugal Mode**: Reduces your base non-property expenses by a % for a selected window.
+- **Separate incomes** are now modeled independently (start year + growth per person).
+- **Push-Hard**: optional extra income + extra cost for the first N years.
+- **Frugal Mode**: reduces base non-property expenses by a % for a chosen window.
 - **Net Worth**: `Cash + Property Equity - Remaining Student Loans`
-  - Property equity already nets out mortgages + HELOCs (so we don't double-count those liabilities).
-- **Student loans**: Straight-line paydown once repayment starts (easy to upgrade to interest-based later).
-- **Mortgage**: Uses standard fixed-rate amortization math for remaining balance; payment is based on starting principal.
-- **HELOC**: One draw event per property (for now), capped by CLTV; interest is charged annually.
-- **Liquidation**: No selling costs/taxes modeled yet.
+  - Equity already nets out mortgages + HELOCs (so we don’t double-count those debts).
+- **HELOC**: one draw event per property (for now), capped by CLTV; interest charged annually.
+- **Liquidation**: no selling costs/taxes modeled yet.
         """
     )
