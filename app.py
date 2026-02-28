@@ -10,7 +10,7 @@ st.title("Financial Freedom Timeline Planner — Net Worth + Modes + 10 Properti
 # Helpers
 # -----------------------------
 def amort_payment(principal: float, annual_rate: float, years: int) -> float:
-    """Monthly payment (P&I) for fixed-rate mortgage."""
+    """Monthly payment (P&I) for fixed-rate amortizing loan."""
     r = annual_rate / 12.0
     n = years * 12
     if principal <= 0:
@@ -23,7 +23,7 @@ def mortgage_balance(principal: float, annual_rate: float, years: int, months_pa
     """Remaining balance after months_paid payments, fixed-rate fully amortizing."""
     r = annual_rate / 12.0
     n = years * 12
-    m = max(0, min(months_paid, n))
+    m = max(0, min(int(months_paid), n))
     if principal <= 0:
         return 0.0
     if r == 0:
@@ -31,6 +31,12 @@ def mortgage_balance(principal: float, annual_rate: float, years: int, months_pa
     pmt = amort_payment(principal, annual_rate, years)
     bal = principal * (1 + r) ** m - pmt * (((1 + r) ** m - 1) / r)
     return max(0.0, bal)
+
+def annual_to_monthly(annual: float) -> float:
+    return float(annual) / 12.0
+
+def monthly_to_annual(monthly: float) -> float:
+    return float(monthly) * 12.0
 
 # -----------------------------
 # Sidebar: Global settings + Modes
@@ -84,11 +90,11 @@ ic1, ic2, ic3, ic4 = st.columns(4)
 with ic1:
     cody_income0 = st.number_input("Cody income (Year 0, annual)", 0, 1000000, 140000, step=1000)
 with ic2:
-    lauren_income0 = st.number_input("Lauren income (Year 0, annual)", 0, 1000000, 30000, step=1000)
+    lauren_income0 = st.number_input("Lauren income (Year 0, annual)", 0, 1000000, 75000, step=1000)
 with ic3:
-    cody_growth = st.slider("Cody income growth (%/yr)", 0.0, 15.0, 2.5, 0.1)
+    cody_growth = st.slider("Cody income growth (%/yr)", 0.0, 15.0, 0.0, 0.1)
 with ic4:
-    lauren_growth = st.slider("Lauren income growth (%/yr)", 0.0, 15.0, 2.5, 0.1)
+    lauren_growth = st.slider("Lauren income growth (%/yr)", 0.0, 15.0, 2.0, 0.1)
 
 ic5, ic6, ic7, ic8 = st.columns(4)
 with ic5:
@@ -105,22 +111,55 @@ e1, e2 = st.columns(2)
 with e1:
     base_living_expenses = st.number_input("Core annual expenses (non-property)", 0, 600000, 90000, step=1000)
 with e2:
-    # Optional inflation knob if you want it; set to 0 if you don't
     expense_growth = st.slider("Expense growth / inflation (%/yr)", 0.0, 10.0, 0.0, 0.1)
 
 # -----------------------------
-# Student Loans
+# Student Loans (interest-based)
 # -----------------------------
-st.subheader("Student Loans (simple but tracked over time)")
-sl1, sl2, sl3 = st.columns(3)
+st.subheader("Student Loans (interest-based aggregate)")
+sl1, sl2, sl3, sl4 = st.columns(4)
 with sl1:
-    student_loan_balance0 = st.number_input("Starting student loan balance", 0, 3000000, 510000, step=1000)
+    student_loan_balance0 = st.number_input("Starting student loan balance", 0, 3000000, 232000, step=1000)
 with sl2:
-    student_loan_years = st.number_input("Repayment horizon (years)", 1, 40, 20)
+    student_loan_interest_rate = st.slider("Aggregate student loan interest rate (%)", 0.0, 15.0, 6.8, 0.1)
 with sl3:
+    student_loan_years = st.number_input("Repayment horizon (years)", 1, 40, 20)
+with sl4:
     student_loan_start_year = st.number_input("Repayment starts in year", 0, horizon_years, 1)
 
-student_loan_annual_payment = student_loan_balance0 / max(student_loan_years, 1)
+def student_loan_annual_payment(principal: float, annual_rate_pct: float, years_term: int) -> float:
+    """Annual payment for amortizing loan (simple aggregate model)."""
+    r = (annual_rate_pct / 100.0) / 12.0
+    n = years_term * 12
+    if principal <= 0:
+        return 0.0
+    if r == 0:
+        return principal / max(years_term, 1)
+    pmt_m = principal * (r * (1 + r) ** n) / ((1 + r) ** n - 1)
+    return float(pmt_m * 12.0)
+
+student_loan_payment_annual = student_loan_annual_payment(
+    student_loan_balance0, student_loan_interest_rate, int(student_loan_years)
+)
+
+def student_loan_remaining(year: int) -> float:
+    """Remaining balance after full years of payments starting at student_loan_start_year."""
+    if year < student_loan_start_year:
+        return float(student_loan_balance0)
+
+    r = (student_loan_interest_rate / 100.0) / 12.0
+    n = int(student_loan_years) * 12
+    pmt_m = (student_loan_payment_annual / 12.0)
+
+    months_paid = (year - student_loan_start_year + 1) * 12
+    months_paid = min(months_paid, n)
+
+    if r == 0:
+        bal = student_loan_balance0 - pmt_m * months_paid
+        return float(max(0.0, bal))
+
+    bal = student_loan_balance0 * (1 + r) ** months_paid - pmt_m * (((1 + r) ** months_paid - 1) / r)
+    return float(max(0.0, bal))
 
 # -----------------------------
 # Capital / reserves
@@ -154,7 +193,6 @@ for i in range(max_props):
         purchase_year = top3.number_input("Purchase year", 0, horizon_years, default_buy_year, key=f"p_buy_{i}")
         liquidation_year = top4.number_input("Liquidation year (0 = never)", 0, horizon_years, 0, key=f"p_sell_{i}")
 
-        # Existing property mode
         ex1, ex2, ex3 = st.columns(3)
         is_existing = ex1.checkbox("Existing at Year 0 (already owned)", value=(i == 0), key=f"p_exist_{i}")
         existing_value = ex2.number_input(
@@ -174,7 +212,6 @@ for i in range(max_props):
             disabled=not is_existing
         )
 
-        # Force purchase year = 0 for existing assets
         if is_existing:
             purchase_year = 0
 
@@ -214,7 +251,6 @@ for i in range(max_props):
         pm_pct = r11.slider("PM fee (% of rent)", 0.0, 25.0, 10.0, 0.5, key=f"p_pm_{i}") if pm_enabled else 0.0
         value_growth = r12.slider("Home value growth (%/yr)", -5.0, 15.0, 3.0, 0.1, key=f"p_grow_{i}")
 
-        # Rent start + rent growth
         rs1, rs2 = st.columns(2)
         rent_start_year = rs1.number_input("Rent starts in year", 0, horizon_years, int(purchase_year), key=f"p_rent_start_{i}")
         rent_growth = rs2.slider("Rent growth (%/yr)", -5.0, 15.0, 2.0, 0.1, key=f"p_rent_grow_{i}")
@@ -275,16 +311,6 @@ for p in properties:
     })
 
 # -----------------------------
-# Student loan remaining balance over time (simple)
-# -----------------------------
-def student_loan_remaining(year: int) -> float:
-    if year < student_loan_start_year:
-        return float(student_loan_balance0)
-    years_paid = year - student_loan_start_year + 1
-    paid = years_paid * student_loan_annual_payment
-    return float(max(0.0, student_loan_balance0 - paid))
-
-# -----------------------------
 # Income model (separate earners)
 # -----------------------------
 def income_stream(base: float, growth_pct: float, year: int, start_year: int) -> float:
@@ -300,15 +326,17 @@ rows = []
 cash = float(starting_cash)
 
 for y in years:
-    # Separate incomes (your request)
-    cody_income_y = income_stream(cody_income0, cody_growth, int(y), int(cody_income_start))
-    lauren_income_y = income_stream(lauren_income0, lauren_growth, int(y), int(lauren_income_start))
-    other_income_y = income_stream(other_income0, other_income_growth, int(y), 0)
+    y = int(y)
+
+    # Separate incomes
+    cody_income_y = income_stream(cody_income0, cody_growth, y, int(cody_income_start))
+    lauren_income_y = income_stream(lauren_income0, lauren_growth, y, int(lauren_income_start))
+    other_income_y = income_stream(other_income0, other_income_growth, y, 0)
 
     base_income_y = cody_income_y + lauren_income_y + other_income_y
 
-    # Expenses (optional inflation)
-    base_expenses_y = float(base_living_expenses) * ((1 + expense_growth / 100.0) ** int(y))
+    # Expenses
+    base_expenses_y = float(base_living_expenses) * ((1 + expense_growth / 100.0) ** y)
 
     # Push-hard adjustments
     extra_income_y = float(push_extra_income) if (push_hard and y < push_years) else 0.0
@@ -321,7 +349,9 @@ for y in years:
     income_y = base_income_y + extra_income_y
     expenses_y = base_expenses_y + extra_cost_y
 
-    sl_pay_y = student_loan_annual_payment if (y >= student_loan_start_year and student_loan_remaining(int(y)) > 0) else 0.0
+    # Student loan payment active after start year and while balance remains
+    sl_remaining = student_loan_remaining(y)
+    sl_pay_y = student_loan_payment_annual if (y >= student_loan_start_year and sl_remaining > 0) else 0.0
 
     rental_cf_y = 0.0
     total_equity = 0.0
@@ -368,7 +398,7 @@ for y in years:
                 cash += draw
                 heloc_drawn_total += draw
 
-        # Rent only starts at rent_start_year and can grow
+        # Rent starts at rent_start_year and can grow
         if y >= p["rent_start_year"]:
             rent_years = y - p["rent_start_year"]
             gross_rent_annual = 12 * p["gross_rent_month"] * ((1 + p["rent_growth"]) ** rent_years)
@@ -396,7 +426,7 @@ for y in years:
         total_heloc += stt["heloc_balance"]
         active_props += 1
 
-        # Liquidation (end of year sale)
+        # Liquidation (end of year)
         if p["liquidation_year"] > 0 and y == p["liquidation_year"]:
             net_proceeds = max(0.0, home_value - mort_bal - stt["heloc_balance"])
             cash += net_proceeds
@@ -407,18 +437,16 @@ for y in years:
     if reinvest_surplus:
         cash += net_cash_flow_y
 
-    sl_remaining = student_loan_remaining(int(y))
+    # Net worth: Cash + Equity - Student loans remaining
     net_worth = cash + total_equity - sl_remaining
 
     status = "🟢 Sustainable" if net_cash_flow_y >= 30000 else ("🟡 Tight buffer" if net_cash_flow_y >= 10000 else "🔴 At risk")
 
     rows.append({
-        "Year": int(y),
-
+        "Year": y,
         "Cody Income": round(cody_income_y, 2),
         "Lauren Income": round(lauren_income_y, 2),
         "Other Income": round(other_income_y, 2),
-
         "Income (Total)": round(income_y, 2),
         "Expenses": round(expenses_y, 2),
 
@@ -509,12 +537,15 @@ st.dataframe(df, use_container_width=True)
 
 with st.expander("Notes / simplifications"):
     st.markdown(
-        """
-- **Separate incomes** are now modeled independently (start year + growth per person).
-- **Push-Hard**: optional extra income + extra cost for the first N years.
-- **Frugal Mode**: reduces base non-property expenses by a % for a chosen window.
-- **Net Worth**: `Cash + Property Equity - Remaining Student Loans`
-  - Equity already nets out mortgages + HELOCs (so we don’t double-count those debts).
+        f"""
+- **Baseline updates applied**:
+  - Lauren income default = **$75,000**
+  - Student loan starting balance default = **$232,000**
+  - Student loan aggregate interest rate default = **6.8%**
+  - Cody income growth default = **0.0%**
+  - Lauren income growth default = **2.0%**
+- **Student loans** are modeled as a single amortizing loan (aggregate) starting in the chosen year.
+- **Net Worth** = Cash + Property Equity − Student Loan Remaining.
 - **HELOC**: one draw event per property (for now), capped by CLTV; interest charged annually.
 - **Liquidation**: no selling costs/taxes modeled yet.
         """
