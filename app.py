@@ -4,7 +4,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 
 st.set_page_config(page_title="Financial Freedom Timeline Planner", layout="wide")
-st.title("Financial Freedom Timeline Planner — Net Worth + Modes + 10 Properties + HELOC + Liquidations")
+st.title("Financial Freedom Timeline Planner — Net Worth + Modes + Retirement + 10 Properties + HELOC + Liquidations")
 
 # -----------------------------
 # Helpers
@@ -32,11 +32,15 @@ def mortgage_balance(principal: float, annual_rate: float, years: int, months_pa
     bal = principal * (1 + r) ** m - pmt * (((1 + r) ** m - 1) / r)
     return max(0.0, bal)
 
-def annual_to_monthly(annual: float) -> float:
-    return float(annual) / 12.0
+def income_stream(base: float, growth_pct: float, year: int, start_year: int) -> float:
+    if year < start_year:
+        return 0.0
+    t = year - start_year
+    return float(base * ((1 + growth_pct / 100.0) ** t))
 
-def monthly_to_annual(monthly: float) -> float:
-    return float(monthly) * 12.0
+def grow_balance(balance: float, annual_return_pct: float) -> float:
+    """Apply annual return to a balance (end-of-year style)."""
+    return float(balance * (1.0 + annual_return_pct / 100.0))
 
 # -----------------------------
 # Sidebar: Global settings + Modes
@@ -53,7 +57,7 @@ with st.sidebar:
     if push_hard:
         push_years = st.number_input("Push-hard duration (years)", 1, 10, 2)
         push_extra_income = st.number_input("Push-hard extra annual income", 0, 300000, 0, step=1000)
-        push_extra_cost = st.number_input("Push-hard annual cost (burnout/childcare/commute/etc.)", 0, 200000, 15000, step=1000)
+        push_extra_cost = st.number_input("Push-hard annual cost", 0, 200000, 15000, step=1000)
     else:
         push_years = 0
         push_extra_income = 0.0
@@ -106,6 +110,9 @@ with ic7:
 with ic8:
     other_income_growth = st.slider("Other income growth (%/yr)", 0.0, 15.0, 0.0, 0.1)
 
+# -----------------------------
+# Expenses
+# -----------------------------
 st.subheader("Household Expenses (annual)")
 e1, e2 = st.columns(2)
 with e1:
@@ -114,9 +121,64 @@ with e2:
     expense_growth = st.slider("Expense growth / inflation (%/yr)", 0.0, 10.0, 0.0, 0.1)
 
 # -----------------------------
-# Student Loans (interest-based)
+# Retirement (NEW)
+# -----------------------------
+st.subheader("Retirement Contributions & Employer Match (NEW)")
+
+rt0, rt1, rt2 = st.columns(3)
+with rt0:
+    retirement_return = st.slider("Assumed retirement account return (%/yr)", 0.0, 15.0, 7.0, 0.1)
+with rt1:
+    include_retirement_in_networth = st.checkbox("Include retirement balances in Net Worth", value=True)
+with rt2:
+    count_retirement_contrib_as_expense = st.checkbox("Treat retirement contributions as cash outflow", value=True)
+
+st.caption("Simple model: contributions + employer match go into retirement accounts each year, then the balance grows by the assumed return.")
+
+# Starting balances
+rb1, rb2 = st.columns(2)
+with rb1:
+    cody_ret_balance0 = st.number_input("Cody retirement starting balance", 0, 5000000, 0, step=1000)
+with rb2:
+    lauren_ret_balance0 = st.number_input("Lauren retirement starting balance", 0, 5000000, 0, step=1000)
+
+# Cody contributions + match
+st.markdown("**Cody: contributions + employer match**")
+c1, c2, c3, c4 = st.columns(4)
+with c1:
+    cody_contrib_pct = st.slider("Cody employee contribution (% of income)", 0.0, 30.0, 0.0, 0.5)
+with c2:
+    cody_employer_match_pct = st.slider("Cody employer match (% of income)", 0.0, 15.0, 0.0, 0.5)
+with c3:
+    cody_match_cap_pct = st.slider("Cody match cap (match only up to % contributed)", 0.0, 15.0, 0.0, 0.5)
+with c4:
+    cody_contrib_start_year = st.number_input("Cody retirement contributions start year", 0, horizon_years, 0)
+
+# Lauren contributions + match
+st.markdown("**Lauren: contributions + employer match**")
+l1, l2, l3, l4 = st.columns(4)
+with l1:
+    lauren_contrib_pct = st.slider("Lauren employee contribution (% of income)", 0.0, 30.0, 0.0, 0.5)
+with l2:
+    lauren_employer_match_pct = st.slider("Lauren employer match (% of income)", 0.0, 15.0, 0.0, 0.5)
+with l3:
+    lauren_match_cap_pct = st.slider("Lauren match cap (match only up to % contributed)", 0.0, 15.0, 0.0, 0.5)
+with l4:
+    lauren_contrib_start_year = st.number_input("Lauren retirement contributions start year", 0, horizon_years, 0)
+
+# Optional IRA extras (flat annual)
+st.markdown("**Optional: Flat annual IRA contributions (after-tax cash outflow)**")
+ira1, ira2 = st.columns(2)
+with ira1:
+    cody_ira_annual = st.number_input("Cody IRA contribution (annual $)", 0, 100000, 0, step=500)
+with ira2:
+    lauren_ira_annual = st.number_input("Lauren IRA contribution (annual $)", 0, 100000, 0, step=500)
+
+# -----------------------------
+# Student Loans (interest-based aggregate)
 # -----------------------------
 st.subheader("Student Loans (interest-based aggregate)")
+
 sl1, sl2, sl3, sl4 = st.columns(4)
 with sl1:
     student_loan_balance0 = st.number_input("Starting student loan balance", 0, 3000000, 232000, step=1000)
@@ -128,7 +190,6 @@ with sl4:
     student_loan_start_year = st.number_input("Repayment starts in year", 0, horizon_years, 1)
 
 def student_loan_annual_payment(principal: float, annual_rate_pct: float, years_term: int) -> float:
-    """Annual payment for amortizing loan (simple aggregate model)."""
     r = (annual_rate_pct / 100.0) / 12.0
     n = years_term * 12
     if principal <= 0:
@@ -143,7 +204,6 @@ student_loan_payment_annual = student_loan_annual_payment(
 )
 
 def student_loan_remaining(year: int) -> float:
-    """Remaining balance after full years of payments starting at student_loan_start_year."""
     if year < student_loan_start_year:
         return float(student_loan_balance0)
 
@@ -311,31 +371,23 @@ for p in properties:
     })
 
 # -----------------------------
-# Income model (separate earners)
-# -----------------------------
-def income_stream(base: float, growth_pct: float, year: int, start_year: int) -> float:
-    if year < start_year:
-        return 0.0
-    t = year - start_year
-    return float(base * ((1 + growth_pct / 100.0) ** t))
-
-# -----------------------------
 # Run simulation
 # -----------------------------
 rows = []
 cash = float(starting_cash)
+cody_ret = float(cody_ret_balance0)
+lauren_ret = float(lauren_ret_balance0)
 
 for y in years:
     y = int(y)
 
-    # Separate incomes
+    # Incomes
     cody_income_y = income_stream(cody_income0, cody_growth, y, int(cody_income_start))
     lauren_income_y = income_stream(lauren_income0, lauren_growth, y, int(lauren_income_start))
     other_income_y = income_stream(other_income0, other_income_growth, y, 0)
-
     base_income_y = cody_income_y + lauren_income_y + other_income_y
 
-    # Expenses
+    # Expenses (inflation)
     base_expenses_y = float(base_living_expenses) * ((1 + expense_growth / 100.0) ** y)
 
     # Push-hard adjustments
@@ -349,10 +401,44 @@ for y in years:
     income_y = base_income_y + extra_income_y
     expenses_y = base_expenses_y + extra_cost_y
 
-    # Student loan payment active after start year and while balance remains
+    # Student loans
     sl_remaining = student_loan_remaining(y)
     sl_pay_y = student_loan_payment_annual if (y >= student_loan_start_year and sl_remaining > 0) else 0.0
 
+    # Retirement contributions + match
+    cody_emp_contrib = 0.0
+    cody_match = 0.0
+    lauren_emp_contrib = 0.0
+    lauren_match = 0.0
+    cody_ira = 0.0
+    lauren_ira = 0.0
+
+    if y >= int(cody_contrib_start_year):
+        cody_emp_contrib = cody_income_y * (cody_contrib_pct / 100.0)
+        # Match is limited by "match cap %": employer match applies only up to that % contributed
+        effective_contrib_pct = min(cody_contrib_pct, cody_match_cap_pct) if cody_match_cap_pct > 0 else 0.0
+        cody_match = cody_income_y * (min(cody_employer_match_pct, effective_contrib_pct) / 100.0)
+
+    if y >= int(lauren_contrib_start_year):
+        lauren_emp_contrib = lauren_income_y * (lauren_contrib_pct / 100.0)
+        effective_contrib_pct = min(lauren_contrib_pct, lauren_match_cap_pct) if lauren_match_cap_pct > 0 else 0.0
+        lauren_match = lauren_income_y * (min(lauren_employer_match_pct, effective_contrib_pct) / 100.0)
+
+    # Flat IRA (assumed cash-funded)
+    cody_ira = float(cody_ira_annual) if cody_income_y > 0 else 0.0
+    lauren_ira = float(lauren_ira_annual) if lauren_income_y > 0 else 0.0
+
+    total_ret_contrib_outflow = 0.0
+    if count_retirement_contrib_as_expense:
+        # Employee contributions and IRA contributions reduce cash flow
+        total_ret_contrib_outflow = cody_emp_contrib + lauren_emp_contrib + cody_ira + lauren_ira
+
+    # Apply retirement flows then growth (end-of-year style)
+    cody_ret = grow_balance(cody_ret + cody_emp_contrib + cody_match + cody_ira, retirement_return)
+    lauren_ret = grow_balance(lauren_ret + lauren_emp_contrib + lauren_match + lauren_ira, retirement_return)
+    total_retirement = cody_ret + lauren_ret
+
+    # Properties
     rental_cf_y = 0.0
     total_equity = 0.0
     total_heloc = 0.0
@@ -369,7 +455,7 @@ for y in years:
         if not stt["active"]:
             continue
 
-        # Purchase event (ONLY for non-existing properties)
+        # Purchase (only non-existing)
         if (not p["is_existing"]) and (y == p["purchase_year"]):
             down_needed = p["purchase_price"] * (p["down_pct"] / 100.0)
             cash -= down_needed
@@ -433,12 +519,16 @@ for y in years:
             stt["active"] = False
             liquidated_props += 1
 
-    net_cash_flow_y = income_y - expenses_y - sl_pay_y + rental_cf_y
+    # Net cash flow and cash update
+    net_cash_flow_y = income_y - expenses_y - sl_pay_y + rental_cf_y - total_ret_contrib_outflow
     if reinvest_surplus:
         cash += net_cash_flow_y
 
-    # Net worth: Cash + Equity - Student loans remaining
+    # Net worth
+    # Equity already nets mortgages + HELOC. Student loans reduce net worth. Retirement optionally included.
     net_worth = cash + total_equity - sl_remaining
+    if include_retirement_in_networth:
+        net_worth += total_retirement
 
     status = "🟢 Sustainable" if net_cash_flow_y >= 30000 else ("🟡 Tight buffer" if net_cash_flow_y >= 10000 else "🔴 At risk")
 
@@ -448,7 +538,13 @@ for y in years:
         "Lauren Income": round(lauren_income_y, 2),
         "Other Income": round(other_income_y, 2),
         "Income (Total)": round(income_y, 2),
+
         "Expenses": round(expenses_y, 2),
+
+        "Retirement Employee Contrib": round(cody_emp_contrib + lauren_emp_contrib, 2),
+        "Retirement Employer Match": round(cody_match + lauren_match, 2),
+        "IRA Contributions": round(cody_ira + lauren_ira, 2),
+        "Retirement Balance (Total)": round(total_retirement, 2),
 
         "Student Loan Pay": round(sl_pay_y, 2),
         "Student Loan Remaining": round(sl_remaining, 2),
@@ -478,12 +574,13 @@ df = pd.DataFrame(rows)
 # -----------------------------
 st.subheader("Results")
 
-m1, m2, m3, m4, m5 = st.columns(5)
+m1, m2, m3, m4, m5, m6 = st.columns(6)
 m1.metric("Final Net Worth", f"${df.loc[df.index[-1], 'Net Worth']:,.0f}")
 m2.metric("Final Net Cash Flow", f"${df.loc[df.index[-1], 'Net Cash Flow']:,.0f}")
 m3.metric("Final Active Properties", f"{df.loc[df.index[-1], 'Active Properties']}")
 m4.metric("Final Investable Cash", f"${df.loc[df.index[-1], 'Investable Cash']:,.0f}")
 m5.metric("Final Equity (active)", f"${df.loc[df.index[-1], 'Total Equity (active)']:,.0f}")
+m6.metric("Final Retirement (total)", f"${df.loc[df.index[-1], 'Retirement Balance (Total)']:,.0f}")
 
 # Net cash flow chart
 fig, ax = plt.subplots()
@@ -501,51 +598,64 @@ fig2, ax2 = plt.subplots()
 ax2.plot(df["Year"], df["Net Worth"], linewidth=2)
 ax2.set_xlabel("Year")
 ax2.set_ylabel("Dollars")
-ax2.set_title("Net Worth Over Time (Cash + Equity - Student Loans)")
+ax2.set_title("Net Worth Over Time")
 st.pyplot(fig2)
 
-# Income breakdown chart
+# Retirement balance chart
 fig3, ax3 = plt.subplots()
-ax3.plot(df["Year"], df["Cody Income"], linewidth=2)
-ax3.plot(df["Year"], df["Lauren Income"], linewidth=2)
-ax3.plot(df["Year"], df["Other Income"], linewidth=2)
+ax3.plot(df["Year"], df["Retirement Balance (Total)"], linewidth=2)
 ax3.set_xlabel("Year")
 ax3.set_ylabel("Dollars")
-ax3.set_title("Income Breakdown Over Time")
-ax3.legend(["Cody", "Lauren", "Other"])
+ax3.set_title("Retirement Balance Over Time")
 st.pyplot(fig3)
 
-# Active properties chart
+# Income breakdown chart
 fig4, ax4 = plt.subplots()
-ax4.plot(df["Year"], df["Active Properties"], linewidth=2)
+ax4.plot(df["Year"], df["Cody Income"], linewidth=2)
+ax4.plot(df["Year"], df["Lauren Income"], linewidth=2)
+ax4.plot(df["Year"], df["Other Income"], linewidth=2)
 ax4.set_xlabel("Year")
-ax4.set_ylabel("Count")
-ax4.set_title("Active Properties Over Time")
+ax4.set_ylabel("Dollars")
+ax4.set_title("Income Breakdown Over Time")
+ax4.legend(["Cody", "Lauren", "Other"])
 st.pyplot(fig4)
 
-# Cash vs equity chart
+# Active properties chart
 fig5, ax5 = plt.subplots()
-ax5.plot(df["Year"], df["Investable Cash"], linewidth=2)
-ax5.plot(df["Year"], df["Total Equity (active)"], linewidth=2)
+ax5.plot(df["Year"], df["Active Properties"], linewidth=2)
 ax5.set_xlabel("Year")
-ax5.set_ylabel("Dollars")
-ax5.set_title("Cash vs Equity (Active Properties)")
-ax5.legend(["Investable Cash", "Total Equity"])
+ax5.set_ylabel("Count")
+ax5.set_title("Active Properties Over Time")
 st.pyplot(fig5)
+
+# Cash vs equity vs retirement chart
+fig6, ax6 = plt.subplots()
+ax6.plot(df["Year"], df["Investable Cash"], linewidth=2)
+ax6.plot(df["Year"], df["Total Equity (active)"], linewidth=2)
+ax6.plot(df["Year"], df["Retirement Balance (Total)"], linewidth=2)
+ax6.set_xlabel("Year")
+ax6.set_ylabel("Dollars")
+ax6.set_title("Cash vs Equity vs Retirement")
+ax6.legend(["Investable Cash", "Total Equity", "Retirement"])
+st.pyplot(fig6)
 
 st.dataframe(df, use_container_width=True)
 
 with st.expander("Notes / simplifications"):
     st.markdown(
-        f"""
-- **Baseline updates applied**:
-  - Lauren income default = **$75,000**
-  - Student loan starting balance default = **$232,000**
-  - Student loan aggregate interest rate default = **6.8%**
-  - Cody income growth default = **0.0%**
-  - Lauren income growth default = **2.0%**
-- **Student loans** are modeled as a single amortizing loan (aggregate) starting in the chosen year.
-- **Net Worth** = Cash + Property Equity − Student Loan Remaining.
+        """
+- **Retirement added**:
+  - Separate balances for Cody + Lauren
+  - Employee contribution as % of income
+  - Employer match as % of income, capped by a max % of income matched *and* only up to your contribution %
+  - Optional flat annual IRA contributions
+  - Retirement balances grow at an assumed annual return
+- **Cashflow handling**:
+  - If “Treat retirement contributions as cash outflow” is ON, employee contributions + IRA contributions reduce Net Cash Flow and cash.
+  - Employer match does **not** reduce cash (free money into retirement).
+- **Net Worth**:
+  - Always includes: Cash + Property Equity − Student Loan Remaining
+  - Optionally includes retirement balances (toggle)
 - **HELOC**: one draw event per property (for now), capped by CLTV; interest charged annually.
 - **Liquidation**: no selling costs/taxes modeled yet.
         """
