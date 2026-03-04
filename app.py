@@ -4,7 +4,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 
 st.set_page_config(page_title="Financial Freedom Timeline Planner", layout="wide")
-st.title("Financial Freedom Timeline Planner — Net Worth + Modes + Retirement + 10 Properties + HELOC + Liquidations")
+st.title("Financial Freedom Timeline Planner — Net Worth + Modes + Retirement + 10 Properties + HELOC + Liquidations + Pharmacy Buy-In")
 
 # -----------------------------
 # Helpers
@@ -41,6 +41,20 @@ def income_stream(base: float, growth_pct: float, year: int, start_year: int) ->
 def grow_balance(balance: float, annual_return_pct: float) -> float:
     """Apply annual return to a balance (end-of-year style)."""
     return float(balance * (1.0 + annual_return_pct / 100.0))
+
+def annual_amort_step(balance: float, annual_rate: float, annual_payment: float, extra_principal: float = 0.0):
+    """
+    One year amortization step (simple annual approximation).
+    Returns: (payment_effective, interest, principal_paid, end_balance)
+    """
+    if balance <= 0:
+        return 0.0, 0.0, 0.0, 0.0
+    interest = balance * annual_rate
+    scheduled_principal = max(0.0, annual_payment - interest)
+    total_principal = min(balance, scheduled_principal + max(0.0, extra_principal))
+    payment_effective = interest + total_principal
+    end_balance = max(0.0, balance - total_principal)
+    return payment_effective, interest, total_principal, end_balance
 
 # -----------------------------
 # Sidebar: Global settings + Modes
@@ -119,6 +133,66 @@ with e1:
     base_living_expenses = st.number_input("Core annual expenses (non-property)", 0, 600000, 90000, step=1000)
 with e2:
     expense_growth = st.slider("Expense growth / inflation (%/yr)", 0.0, 10.0, 0.0, 0.1)
+
+# -----------------------------
+# Mortgage Prepay Savings (Pharmacy scenario tie-in)
+# -----------------------------
+st.subheader("Mortgage Prepay Savings (Optional)")
+
+mp1, mp2, mp3, mp4 = st.columns(4)
+with mp1:
+    include_mortgage_prepay_savings = st.checkbox("Include mortgage prepay savings in cash flow", value=True)
+with mp2:
+    mortgage_prepay_amount = st.number_input("Mortgage prepay amount ($)", 0, 5000000, 71000, step=1000, disabled=not include_mortgage_prepay_savings)
+with mp3:
+    mortgage_savings_annual = st.number_input("Annual mortgage savings ($/yr)", 0, 500000, 8000, step=250, disabled=not include_mortgage_prepay_savings)
+with mp4:
+    mortgage_savings_start_year = st.number_input("Mortgage savings start year", 0, horizon_years, 0, disabled=not include_mortgage_prepay_savings)
+
+st.caption("This models the $/yr savings as additional free cash flow starting at the selected year (does not change property amortization here).")
+
+# -----------------------------
+# Pharmacy Buy-In (NEW)
+# -----------------------------
+st.subheader("Pharmacy Buy-In Scenario (NEW)")
+
+pb0, pb1, pb2, pb3 = st.columns(4)
+with pb0:
+    pharmacy_buyin_enabled = st.checkbox("Enable pharmacy buy-in scenario", value=False)
+with pb1:
+    pharmacy_buyin_year = st.number_input("Buy-in year", 0, horizon_years, 0, disabled=not pharmacy_buyin_enabled)
+with pb2:
+    pharmacy_buyin_price = st.number_input("Buy-in price ($)", 0, 5000000, 120000, step=1000, disabled=not pharmacy_buyin_enabled)
+with pb3:
+    pharmacy_cash_down = st.number_input("Your cash down ($)", 0, 5000000, 47000, step=1000, disabled=not pharmacy_buyin_enabled)
+
+pb4, pb5, pb6, pb7 = st.columns(4)
+with pb4:
+    pharmacy_expected_profit = st.number_input("Your expected annual profit from stake ($)", 0, 2000000, 30000, step=1000, disabled=not pharmacy_buyin_enabled)
+with pb5:
+    pharmacy_profit_start_year = st.number_input("Profit starts in year", 0, horizon_years, int(pharmacy_buyin_year), disabled=not pharmacy_buyin_enabled)
+with pb6:
+    seller_note_years = st.number_input("Seller note term (years)", 1, 15, 5, step=1, disabled=not pharmacy_buyin_enabled)
+with pb7:
+    seller_note_rate_pct = st.slider("Seller note rate (%)", 0.0, 15.0, 5.5, 0.1, disabled=not pharmacy_buyin_enabled)
+
+pb8, pb9, pb10, pb11 = st.columns(4)
+with pb8:
+    include_pharmacy_equity_in_networth = st.checkbox("Include pharmacy equity in Net Worth", value=True, disabled=not pharmacy_buyin_enabled)
+with pb9:
+    pharmacy_equity_growth_pct = st.slider("Pharmacy equity value growth (%/yr)", -10.0, 20.0, 0.0, 0.1, disabled=not pharmacy_buyin_enabled)
+with pb10:
+    enable_accel_paydown = st.checkbox("Enable accelerated principal paydown", value=True, disabled=not pharmacy_buyin_enabled)
+with pb11:
+    accel_year = st.number_input("Apply extra principal in year", 0, horizon_years, 2, disabled=not (pharmacy_buyin_enabled and enable_accel_paydown))
+
+pb12, pb13, pb14 = st.columns(3)
+with pb12:
+    lauren_dist_lump = st.number_input("Lauren distribution (lump sum extra principal) ($)", 0, 5000000, 20000, step=1000, disabled=not (pharmacy_buyin_enabled and enable_accel_paydown))
+with pb13:
+    extra_principal_recurring = st.number_input("Recurring extra principal (annual) ($)", 0, 5000000, 0, step=1000, disabled=not (pharmacy_buyin_enabled and enable_accel_paydown))
+with pb14:
+    recurring_extra_start_year = st.number_input("Recurring extra starts year", 0, horizon_years, 2, disabled=not (pharmacy_buyin_enabled and enable_accel_paydown))
 
 # -----------------------------
 # Retirement (NEW)
@@ -378,6 +452,14 @@ cash = float(starting_cash)
 cody_ret = float(cody_ret_balance0)
 lauren_ret = float(lauren_ret_balance0)
 
+# Pharmacy state
+ph_note_balance = 0.0
+ph_annual_payment = 0.0
+ph_equity_value = 0.0
+ph_active = False
+
+seller_note_rate = (float(seller_note_rate_pct) / 100.0) if pharmacy_buyin_enabled else 0.0
+
 for y in years:
     y = int(y)
 
@@ -415,7 +497,6 @@ for y in years:
 
     if y >= int(cody_contrib_start_year):
         cody_emp_contrib = cody_income_y * (cody_contrib_pct / 100.0)
-        # Match is limited by "match cap %": employer match applies only up to that % contributed
         effective_contrib_pct = min(cody_contrib_pct, cody_match_cap_pct) if cody_match_cap_pct > 0 else 0.0
         cody_match = cody_income_y * (min(cody_employer_match_pct, effective_contrib_pct) / 100.0)
 
@@ -424,16 +505,13 @@ for y in years:
         effective_contrib_pct = min(lauren_contrib_pct, lauren_match_cap_pct) if lauren_match_cap_pct > 0 else 0.0
         lauren_match = lauren_income_y * (min(lauren_employer_match_pct, effective_contrib_pct) / 100.0)
 
-    # Flat IRA (assumed cash-funded)
     cody_ira = float(cody_ira_annual) if cody_income_y > 0 else 0.0
     lauren_ira = float(lauren_ira_annual) if lauren_income_y > 0 else 0.0
 
     total_ret_contrib_outflow = 0.0
     if count_retirement_contrib_as_expense:
-        # Employee contributions and IRA contributions reduce cash flow
         total_ret_contrib_outflow = cody_emp_contrib + lauren_emp_contrib + cody_ira + lauren_ira
 
-    # Apply retirement flows then growth (end-of-year style)
     cody_ret = grow_balance(cody_ret + cody_emp_contrib + cody_match + cody_ira, retirement_return)
     lauren_ret = grow_balance(lauren_ret + lauren_emp_contrib + lauren_match + lauren_ira, retirement_return)
     total_retirement = cody_ret + lauren_ret
@@ -455,7 +533,6 @@ for y in years:
         if not stt["active"]:
             continue
 
-        # Purchase (only non-existing)
         if (not p["is_existing"]) and (y == p["purchase_year"]):
             down_needed = p["purchase_price"] * (p["down_pct"] / 100.0)
             cash -= down_needed
@@ -474,7 +551,6 @@ for y in years:
             months_paid=months_paid
         )
 
-        # HELOC draw (one-shot)
         if p["heloc_enabled"] and p["heloc_draw_year"] > 0 and y == p["heloc_draw_year"]:
             allowed_total_debt = p["heloc_cltv"] * home_value
             allowed_heloc = max(0.0, allowed_total_debt - mort_bal)
@@ -484,7 +560,6 @@ for y in years:
                 cash += draw
                 heloc_drawn_total += draw
 
-        # Rent starts at rent_start_year and can grow
         if y >= p["rent_start_year"]:
             rent_years = y - p["rent_start_year"]
             gross_rent_annual = 12 * p["gross_rent_month"] * ((1 + p["rent_growth"]) ** rent_years)
@@ -512,23 +587,98 @@ for y in years:
         total_heloc += stt["heloc_balance"]
         active_props += 1
 
-        # Liquidation (end of year)
         if p["liquidation_year"] > 0 and y == p["liquidation_year"]:
             net_proceeds = max(0.0, home_value - mort_bal - stt["heloc_balance"])
             cash += net_proceeds
             stt["active"] = False
             liquidated_props += 1
 
+    # Mortgage savings cashflow (optional)
+    mort_savings_y = 0.0
+    if include_mortgage_prepay_savings and (y >= int(mortgage_savings_start_year)):
+        mort_savings_y = float(mortgage_savings_annual)
+
+    # Pharmacy buy-in cashflow + note + equity value
+    ph_profit_y = 0.0
+    ph_note_payment_y = 0.0
+    ph_note_interest_y = 0.0
+    ph_note_principal_y = 0.0
+    ph_extra_principal_y = 0.0
+
+    if pharmacy_buyin_enabled:
+        # Buy-in event
+        if (y == int(pharmacy_buyin_year)) and (not ph_active):
+            ph_active = True
+            cash -= float(pharmacy_cash_down)
+            ph_note_balance = max(0.0, float(pharmacy_buyin_price) - float(pharmacy_cash_down))
+            # Annual payment (simple annual amort approximation)
+            # This matches the model’s annual cadence (not exact monthly amort)
+            # Still “close enough” for planning.
+            if seller_note_years > 0 and ph_note_balance > 0:
+                # Use annual amort approx: convert note_rate to annual and compute a level annual payment
+                # Payment formula (annual):
+                r = seller_note_rate
+                n = int(seller_note_years)
+                if r == 0:
+                    ph_annual_payment = ph_note_balance / n
+                else:
+                    ph_annual_payment = ph_note_balance * (r) / (1 - (1 + r) ** (-n))
+            else:
+                ph_annual_payment = 0.0
+
+            # Equity value at purchase (can grow)
+            ph_equity_value = float(pharmacy_buyin_price)
+
+        # Grow equity value each year after activation (end-of-year style)
+        if ph_active and y >= int(pharmacy_buyin_year):
+            yrs_since = y - int(pharmacy_buyin_year)
+            ph_equity_value = float(pharmacy_buyin_price) * ((1 + float(pharmacy_equity_growth_pct) / 100.0) ** yrs_since)
+
+        # Profit stream
+        if ph_active and (y >= int(pharmacy_profit_start_year)):
+            ph_profit_y = float(pharmacy_expected_profit)
+
+        # Note amortization (during active years)
+        if ph_active and ph_note_balance > 0 and ph_annual_payment > 0:
+            # Extra principal logic
+            extra = 0.0
+            if enable_accel_paydown:
+                if int(accel_year) > 0 and y == int(accel_year):
+                    extra += float(lauren_dist_lump)
+                if float(extra_principal_recurring) > 0 and y >= int(recurring_extra_start_year):
+                    extra += float(extra_principal_recurring)
+
+            ph_extra_principal_y = extra
+            ph_note_payment_y, ph_note_interest_y, ph_note_principal_y, ph_note_balance = annual_amort_step(
+                balance=ph_note_balance,
+                annual_rate=seller_note_rate,
+                annual_payment=float(ph_annual_payment),
+                extra_principal=extra
+            )
+
     # Net cash flow and cash update
-    net_cash_flow_y = income_y - expenses_y - sl_pay_y + rental_cf_y - total_ret_contrib_outflow
+    # Add mortgage savings + pharmacy profit; subtract seller note payments
+    net_cash_flow_y = (
+        income_y
+        - expenses_y
+        - sl_pay_y
+        + rental_cf_y
+        + mort_savings_y
+        + ph_profit_y
+        - ph_note_payment_y
+        - total_ret_contrib_outflow
+    )
+
     if reinvest_surplus:
         cash += net_cash_flow_y
 
     # Net worth
-    # Equity already nets mortgages + HELOC. Student loans reduce net worth. Retirement optionally included.
     net_worth = cash + total_equity - sl_remaining
     if include_retirement_in_networth:
         net_worth += total_retirement
+    if pharmacy_buyin_enabled and include_pharmacy_equity_in_networth and ph_active:
+        # Add pharmacy equity, subtract remaining seller note balance (liability)
+        net_worth += (ph_equity_value - ph_note_balance)
 
     status = "🟢 Sustainable" if net_cash_flow_y >= 30000 else ("🟡 Tight buffer" if net_cash_flow_y >= 10000 else "🔴 At risk")
 
@@ -550,6 +700,16 @@ for y in years:
         "Student Loan Remaining": round(sl_remaining, 2),
 
         "Rental Cash Flow": round(rental_cf_y, 2),
+        "Mortgage Savings": round(mort_savings_y, 2),
+
+        "Pharmacy Profit": round(ph_profit_y, 2),
+        "Pharmacy Note Payment": round(ph_note_payment_y, 2),
+        "Pharmacy Note Interest": round(ph_note_interest_y, 2),
+        "Pharmacy Note Principal": round(ph_note_principal_y, 2),
+        "Pharmacy Extra Principal": round(ph_extra_principal_y, 2),
+        "Pharmacy Note Balance": round(ph_note_balance, 2),
+        "Pharmacy Equity Value": round(ph_equity_value, 2) if ph_active else 0.0,
+
         "Net Cash Flow": round(net_cash_flow_y, 2),
 
         "Investable Cash": round(cash, 2),
@@ -639,11 +799,37 @@ ax6.set_title("Cash vs Equity vs Retirement")
 ax6.legend(["Investable Cash", "Total Equity", "Retirement"])
 st.pyplot(fig6)
 
+# Pharmacy charts (only if enabled)
+if pharmacy_buyin_enabled:
+    st.subheader("Pharmacy Buy-In Charts")
+    fig7, ax7 = plt.subplots()
+    ax7.plot(df["Year"], df["Pharmacy Note Balance"], linewidth=2)
+    ax7.set_xlabel("Year")
+    ax7.set_ylabel("Dollars")
+    ax7.set_title("Pharmacy Seller Note Balance Over Time")
+    st.pyplot(fig7)
+
+    fig8, ax8 = plt.subplots()
+    ax8.plot(df["Year"], df["Pharmacy Profit"], linewidth=2)
+    ax8.plot(df["Year"], df["Pharmacy Note Payment"], linewidth=2)
+    ax8.set_xlabel("Year")
+    ax8.set_ylabel("Dollars")
+    ax8.set_title("Pharmacy Profit vs Note Payment")
+    ax8.legend(["Profit", "Note Payment"])
+    st.pyplot(fig8)
+
 st.dataframe(df, use_container_width=True)
 
 with st.expander("Notes / simplifications"):
     st.markdown(
         """
+- **Pharmacy buy-in**:
+  - Models a buy-in with **cash down** + a **seller note** (annual amort approximation).
+  - Adds **pharmacy profit** to annual cash flow and subtracts **seller note payment**.
+  - Optional: apply a **lump sum extra principal** in a chosen year (e.g., Lauren distribution) and/or a recurring extra annual principal.
+  - Optional: include **pharmacy equity value** in Net Worth (with optional % growth). Net worth subtracts the remaining seller note balance.
+- **Mortgage prepay savings**:
+  - Models the savings as extra annual free cash flow starting at the chosen year (does not change property amortization here).
 - **Retirement added**:
   - Separate balances for Cody + Lauren
   - Employee contribution as % of income
@@ -656,6 +842,7 @@ with st.expander("Notes / simplifications"):
 - **Net Worth**:
   - Always includes: Cash + Property Equity − Student Loan Remaining
   - Optionally includes retirement balances (toggle)
+  - Optionally includes pharmacy equity net of seller note (toggle)
 - **HELOC**: one draw event per property (for now), capped by CLTV; interest charged annually.
 - **Liquidation**: no selling costs/taxes modeled yet.
         """
