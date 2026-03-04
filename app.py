@@ -651,17 +651,17 @@ for y in years:
             ph_equity_value = float(pharmacy_buyin_price) * ((1 + float(pharmacy_equity_growth_pct) / 100.0) ** yrs_since)
 
        # Profit stream (with optional annual growth)
-if ph_active and (y >= int(pharmacy_profit_start_year)):
+        if ph_active and (y >= int(pharmacy_profit_start_year)):
 
-    # If growth starts later than profit start, keep flat until then
-    if y < int(pharmacy_profit_growth_start_year):
-        growth_years = 0
-    else:
-        growth_years = y - int(pharmacy_profit_growth_start_year)
-
-    ph_profit_y = float(pharmacy_expected_profit) * (
-        (1 + float(pharmacy_profit_growth_pct) / 100.0) ** growth_years
-    )
+            # If growth starts later than profit start, keep flat until then
+            if y < int(pharmacy_profit_growth_start_year):
+                growth_years = 0
+            else:
+                growth_years = y - int(pharmacy_profit_growth_start_year)
+        
+            ph_profit_y = float(pharmacy_expected_profit) * (
+                (1 + float(pharmacy_profit_growth_pct) / 100.0) ** growth_years
+            )
 
         # Note amortization (during active years)
         if ph_active and ph_note_balance > 0 and ph_annual_payment > 0:
