@@ -176,6 +176,22 @@ with pb6:
 with pb7:
     seller_note_rate_pct = st.slider("Seller note rate (%)", 0.0, 15.0, 5.5, 0.1, disabled=not pharmacy_buyin_enabled)
 
+# NEW: Pharmacy profit growth controls
+pb_growth1, pb_growth2 = st.columns(2)
+with pb_growth1:
+    pharmacy_profit_growth_pct = st.slider(
+        "Pharmacy profit growth (%/yr)",
+        -20.0, 30.0, 0.0, 0.1,
+        disabled=not pharmacy_buyin_enabled
+    )
+
+with pb_growth2:
+    pharmacy_profit_growth_start_year = st.number_input(
+        "Profit growth starts in year",
+        0, horizon_years, int(pharmacy_profit_start_year),
+        disabled=not pharmacy_buyin_enabled
+    )
+
 pb8, pb9, pb10, pb11 = st.columns(4)
 with pb8:
     include_pharmacy_equity_in_networth = st.checkbox("Include pharmacy equity in Net Worth", value=True, disabled=not pharmacy_buyin_enabled)
@@ -634,9 +650,18 @@ for y in years:
             yrs_since = y - int(pharmacy_buyin_year)
             ph_equity_value = float(pharmacy_buyin_price) * ((1 + float(pharmacy_equity_growth_pct) / 100.0) ** yrs_since)
 
-        # Profit stream
-        if ph_active and (y >= int(pharmacy_profit_start_year)):
-            ph_profit_y = float(pharmacy_expected_profit)
+       # Profit stream (with optional annual growth)
+if ph_active and (y >= int(pharmacy_profit_start_year)):
+
+    # If growth starts later than profit start, keep flat until then
+    if y < int(pharmacy_profit_growth_start_year):
+        growth_years = 0
+    else:
+        growth_years = y - int(pharmacy_profit_growth_start_year)
+
+    ph_profit_y = float(pharmacy_expected_profit) * (
+        (1 + float(pharmacy_profit_growth_pct) / 100.0) ** growth_years
+    )
 
         # Note amortization (during active years)
         if ph_active and ph_note_balance > 0 and ph_annual_payment > 0:
