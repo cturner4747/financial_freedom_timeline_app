@@ -1208,7 +1208,6 @@ st.dataframe(df, use_container_width=True)
 with st.expander("Notes / simplifications"):
     st.markdown(
         """
-)        
 - **Gross → Net income**:
   - All salary inputs are **GROSS**.
   - Cashflow uses **NET** income.
@@ -1223,6 +1222,8 @@ with st.expander("Notes / simplifications"):
 - **New house mortgage**:
   - Models annual **PITI + HOA + PMI** as a cashflow expense starting at your selected year.
   - Optional simple equity tracking if you enter purchase price + compute loan from price/down.
+        """
+    )
 - **Pharmacy buy-in**:
   - Models cash down + seller note (annual amort approximation).
   - Adds pharmacy profit to cashflow; subtracts seller note payment.
