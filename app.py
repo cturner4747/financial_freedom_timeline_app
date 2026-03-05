@@ -1208,6 +1208,7 @@ st.dataframe(df, use_container_width=True)
 with st.expander("Notes / simplifications"):
     st.markdown(
         """
+        )
 - **Gross → Net income**:
   - All salary inputs are **GROSS**.
   - Cashflow uses **NET** income.
