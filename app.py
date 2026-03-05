@@ -56,6 +56,40 @@ def annual_amort_step(balance: float, annual_rate: float, annual_payment: float,
     end_balance = max(0.0, balance - total_principal)
     return payment_effective, interest, total_principal, end_balance
 
+def progressive_tax(taxable_income: float, brackets):
+    """
+    brackets: list of tuples (rate, lower, upper_or_None)
+    Example: [(0.10, 0, 24800), (0.12, 24800, 100800), ... (0.37, 768700, None)]
+    Returns tax amount.
+    """
+    ti = max(0.0, float(taxable_income))
+    tax = 0.0
+    for rate, lower, upper in brackets:
+        if ti <= lower:
+            continue
+        if upper is None:
+            amt = ti - lower
+        else:
+            amt = min(ti, upper) - lower
+        if amt > 0:
+            tax += amt * rate
+    return max(0.0, tax)
+
+def fica_employee_tax(wages: float, ss_wage_base: float, ss_rate: float = 0.062, medicare_rate: float = 0.0145,
+                      addl_medicare_rate: float = 0.009, addl_medicare_threshold: float = 250000.0):
+    """
+    Employee-side FICA approximation:
+      - SS: 6.2% up to wage base
+      - Medicare: 1.45% all wages
+      - Additional Medicare: 0.9% above threshold
+    Threshold default assumes Married Filing Jointly. You can override.
+    """
+    w = max(0.0, float(wages))
+    ss_tax = min(w, ss_wage_base) * ss_rate
+    medicare_tax = w * medicare_rate
+    addl = max(0.0, w - addl_medicare_threshold) * addl_medicare_rate
+    return ss_tax + medicare_tax + addl
+
 # -----------------------------
 # Sidebar: Global settings + Modes
 # -----------------------------
@@ -100,15 +134,15 @@ with st.sidebar:
     reinvest_surplus = st.checkbox("Reinvest annual surplus into investable cash", value=True)
 
 # -----------------------------
-# Income (separate for you + wife)
+# Income (Gross -> Net)
 # -----------------------------
-st.subheader("Household Income (separate)")
+st.subheader("Household Income (Gross → Net)")
 
 ic1, ic2, ic3, ic4 = st.columns(4)
 with ic1:
-    cody_income0 = st.number_input("Cody income (Year 0, annual)", 0, 1000000, 140000, step=1000)
+    cody_gross0 = st.number_input("Cody GROSS income (Year 0, annual)", 0, 2000000, 140000, step=1000)
 with ic2:
-    lauren_income0 = st.number_input("Lauren income (Year 0, annual)", 0, 1000000, 75000, step=1000)
+    lauren_gross0 = st.number_input("Lauren GROSS income (Year 0, annual)", 0, 2000000, 75000, step=1000)
 with ic3:
     cody_growth = st.slider("Cody income growth (%/yr)", 0.0, 15.0, 0.0, 0.1)
 with ic4:
@@ -120,9 +154,114 @@ with ic5:
 with ic6:
     lauren_income_start = st.number_input("Lauren income starts in year", 0, 40, 0)
 with ic7:
-    other_income0 = st.number_input("Other household income (Year 0, annual)", 0, 1000000, 0, step=1000)
+    other_income0 = st.number_input("Other household income (Year 0, annual)", 0, 2000000, 0, step=1000)
 with ic8:
     other_income_growth = st.slider("Other income growth (%/yr)", 0.0, 15.0, 0.0, 0.1)
+
+ic9, ic10 = st.columns(2)
+with ic9:
+    other_income_start = st.number_input("Other household income starts in year", 0, 40, 0)
+with ic10:
+    other_income_is_net = st.checkbox("Other household income is already NET (don’t tax it)", value=True)
+
+st.divider()
+st.subheader("Taxes & Net Pay (toggle)")
+
+tx1, tx2, tx3, tx4 = st.columns(4)
+with tx1:
+    tax_mode = st.selectbox(
+        "Net-pay method",
+        ["Simple effective tax %", "Estimate taxes (federal + optional state + optional FICA)"],
+        index=0
+    )
+with tx2:
+    filing_status = st.selectbox("Filing status (for estimator)", ["Married Filing Jointly", "Single", "Head of Household", "Married Filing Separately"], index=0)
+with tx3:
+    include_state_tax = st.checkbox("Include state tax (flat %)", value=False)
+with tx4:
+    state_tax_pct = st.slider("State tax (%)", 0.0, 15.0, 0.0, 0.1, disabled=not include_state_tax)
+
+tx5, tx6, tx7, tx8 = st.columns(4)
+with tx5:
+    # Used in Simple mode
+    cody_effective_tax_pct = st.slider("Cody effective tax % (simple mode)", 0.0, 60.0, 25.0, 0.5, disabled=(tax_mode != "Simple effective tax %"))
+with tx6:
+    lauren_effective_tax_pct = st.slider("Lauren effective tax % (simple mode)", 0.0, 60.0, 20.0, 0.5, disabled=(tax_mode != "Simple effective tax %"))
+with tx7:
+    other_effective_tax_pct = st.slider(
+        "Other income tax % (if not already net)",
+        0.0, 60.0, 0.0, 0.5,
+        disabled=(tax_mode != "Simple effective tax %" or other_income_is_net)
+    )
+with tx8:
+    show_tax_line_item = st.checkbox("Show estimated taxes as a line item in results", value=True)
+
+# Estimator settings
+est1, est2, est3, est4 = st.columns(4)
+with est1:
+    include_fica = st.checkbox("Include employee FICA (estimator)", value=True, disabled=(tax_mode != "Estimate taxes (federal + optional state + optional FICA)"))
+with est2:
+    assume_employee_contribs_pretax = st.checkbox("Treat 401(k) employee contributions as pre-tax (estimator)", value=True, disabled=(tax_mode != "Estimate taxes (federal + optional state + optional FICA)"))
+with est3:
+    tax_year = st.selectbox("Tax year tables (estimator)", ["2026"], index=0, disabled=(tax_mode != "Estimate taxes (federal + optional state + optional FICA)"))
+with est4:
+    addl_medicare_threshold = st.number_input(
+        "Additional Medicare threshold (estimator, $)",
+        0, 1000000, 250000,
+        step=10000,
+        disabled=(tax_mode != "Estimate taxes (federal + optional state + optional FICA)" or not include_fica)
+    )
+
+# 2026 tables (hardcoded for offline use)
+# Brackets commonly published for 2026 (10/12/22/24/32/35/37) + standard deduction.
+# (You can update these numbers later without changing the rest of the model.)
+STD_DEDUCTION_2026 = {
+    "Single": 16100.0,
+    "Married Filing Separately": 16100.0,
+    "Married Filing Jointly": 32200.0,
+    "Head of Household": 24150.0,
+}
+BRACKETS_2026 = {
+    "Single": [
+        (0.10, 0, 12400),
+        (0.12, 12400, 50400),
+        (0.22, 50400, 105700),
+        (0.24, 105700, 201775),
+        (0.32, 201775, 256225),
+        (0.35, 256225, 640600),
+        (0.37, 640600, None),
+    ],
+    "Married Filing Jointly": [
+        (0.10, 0, 24800),
+        (0.12, 24800, 100800),
+        (0.22, 100800, 211400),
+        (0.24, 211400, 403550),
+        (0.32, 403550, 512450),
+        (0.35, 512450, 768700),
+        (0.37, 768700, None),
+    ],
+    "Head of Household": [
+        (0.10, 0, 17700),
+        (0.12, 17700, 67450),
+        (0.22, 67450, 105700),
+        (0.24, 105700, 201750),
+        (0.32, 201750, 256200),
+        (0.35, 256200, 640600),
+        (0.37, 640600, None),
+    ],
+    "Married Filing Separately": [
+        (0.10, 0, 12400),
+        (0.12, 12400, 50400),
+        (0.22, 50400, 105700),
+        (0.24, 105700, 201775),
+        (0.32, 201775, 256225),
+        (0.35, 256225, 384350),
+        (0.37, 384350, None),
+    ],
+}
+
+# SSA 2026 wage base (hardcoded for offline; update if needed)
+SS_WAGE_BASE_2026 = 184500.0
 
 # -----------------------------
 # Expenses
@@ -130,9 +269,60 @@ with ic8:
 st.subheader("Household Expenses (annual)")
 e1, e2 = st.columns(2)
 with e1:
-    base_living_expenses = st.number_input("Core annual expenses (non-property)", 0, 600000, 90000, step=1000)
+    base_living_expenses = st.number_input("Core annual expenses (non-property, excluding primary mortgage)", 0, 600000, 90000, step=1000)
 with e2:
     expense_growth = st.slider("Expense growth / inflation (%/yr)", 0.0, 10.0, 0.0, 0.1)
+
+# -----------------------------
+# Primary Residence / New House Mortgage (PITI + escrow)
+# -----------------------------
+st.subheader("Primary Residence (New House) — Mortgage + Escrow (PITI)")
+
+nh0, nh1, nh2, nh3 = st.columns(4)
+with nh0:
+    new_home_enabled = st.checkbox("Include new house payment in cashflow", value=True)
+with nh1:
+    new_home_start_year = st.number_input("New house payment starts in year", 0, horizon_years, 0, disabled=not new_home_enabled)
+with nh2:
+    compute_loan_from_price = st.checkbox("Compute loan amount from price/down", value=False, disabled=not new_home_enabled)
+with nh3:
+    include_new_home_equity_in_networth = st.checkbox("Include new home equity in Net Worth (simple)", value=False, disabled=not new_home_enabled)
+
+nh4, nh5, nh6, nh7 = st.columns(4)
+with nh4:
+    new_home_purchase_price = st.number_input("Home purchase price ($)", 0, 10000000, 0, step=5000, disabled=not (new_home_enabled and compute_loan_from_price))
+with nh5:
+    new_home_down_pct = st.slider("Down payment (%)", 0.0, 80.0, 20.0, 0.5, disabled=not (new_home_enabled and compute_loan_from_price))
+with nh6:
+    new_home_loan_amount = st.number_input("Loan amount (mortgage principal) ($)", 0, 10000000, 0, step=5000, disabled=not (new_home_enabled and not compute_loan_from_price))
+with nh7:
+    new_home_rate_pct = st.slider("Mortgage rate (%)", 0.0, 15.0, 7.0, 0.1, disabled=not new_home_enabled)
+
+nh8, nh9, nh10, nh11 = st.columns(4)
+with nh8:
+    new_home_term_years = st.number_input("Mortgage term (years)", 1, 40, 30, disabled=not new_home_enabled)
+with nh9:
+    new_home_property_tax_annual = st.number_input("Property tax (annual $)", 0, 200000, 0, step=250, disabled=not new_home_enabled)
+with nh10:
+    new_home_insurance_annual = st.number_input("Home insurance (annual $)", 0, 200000, 0, step=250, disabled=not new_home_enabled)
+with nh11:
+    new_home_hoa_monthly = st.number_input("HOA (monthly $)", 0, 5000, 0, step=25, disabled=not new_home_enabled)
+
+nh12, nh13, nh14, nh15 = st.columns(4)
+with nh12:
+    new_home_pmi_monthly = st.number_input("PMI (monthly $)", 0, 5000, 0, step=25, disabled=not new_home_enabled)
+with nh13:
+    new_home_value_growth_pct = st.slider("Home value growth (%/yr) (for equity calc)", -5.0, 15.0, 3.0, 0.1, disabled=not (new_home_enabled and include_new_home_equity_in_networth))
+with nh14:
+    new_home_sell_year = st.number_input("Sell new home in year (0 = never)", 0, horizon_years, 0, disabled=not (new_home_enabled and include_new_home_equity_in_networth))
+with nh15:
+    new_home_selling_cost_pct = st.slider("Selling costs (% of value)", 0.0, 12.0, 6.0, 0.5, disabled=not (new_home_enabled and include_new_home_equity_in_networth))
+
+# Resolve loan amount if computed from price/down
+if new_home_enabled and compute_loan_from_price:
+    new_home_loan_amount_eff = max(0.0, float(new_home_purchase_price) * (1.0 - float(new_home_down_pct) / 100.0))
+else:
+    new_home_loan_amount_eff = float(new_home_loan_amount)
 
 # -----------------------------
 # Mortgage Prepay Savings (Pharmacy scenario tie-in)
@@ -176,7 +366,6 @@ with pb6:
 with pb7:
     seller_note_rate_pct = st.slider("Seller note rate (%)", 0.0, 15.0, 5.5, 0.1, disabled=not pharmacy_buyin_enabled)
 
-# NEW: Pharmacy profit growth controls
 pb_growth1, pb_growth2 = st.columns(2)
 with pb_growth1:
     pharmacy_profit_growth_pct = st.slider(
@@ -184,7 +373,6 @@ with pb_growth1:
         -20.0, 30.0, 0.0, 0.1,
         disabled=not pharmacy_buyin_enabled
     )
-
 with pb_growth2:
     pharmacy_profit_growth_start_year = st.number_input(
         "Profit growth starts in year",
@@ -225,38 +413,34 @@ with rt2:
 
 st.caption("Simple model: contributions + employer match go into retirement accounts each year, then the balance grows by the assumed return.")
 
-# Starting balances
 rb1, rb2 = st.columns(2)
 with rb1:
     cody_ret_balance0 = st.number_input("Cody retirement starting balance", 0, 5000000, 0, step=1000)
 with rb2:
     lauren_ret_balance0 = st.number_input("Lauren retirement starting balance", 0, 5000000, 0, step=1000)
 
-# Cody contributions + match
 st.markdown("**Cody: contributions + employer match**")
 c1, c2, c3, c4 = st.columns(4)
 with c1:
-    cody_contrib_pct = st.slider("Cody employee contribution (% of income)", 0.0, 30.0, 0.0, 0.5)
+    cody_contrib_pct = st.slider("Cody employee contribution (% of gross income)", 0.0, 30.0, 0.0, 0.5)
 with c2:
-    cody_employer_match_pct = st.slider("Cody employer match (% of income)", 0.0, 15.0, 0.0, 0.5)
+    cody_employer_match_pct = st.slider("Cody employer match (% of gross income)", 0.0, 15.0, 0.0, 0.5)
 with c3:
     cody_match_cap_pct = st.slider("Cody match cap (match only up to % contributed)", 0.0, 15.0, 0.0, 0.5)
 with c4:
     cody_contrib_start_year = st.number_input("Cody retirement contributions start year", 0, horizon_years, 0)
 
-# Lauren contributions + match
 st.markdown("**Lauren: contributions + employer match**")
 l1, l2, l3, l4 = st.columns(4)
 with l1:
-    lauren_contrib_pct = st.slider("Lauren employee contribution (% of income)", 0.0, 30.0, 0.0, 0.5)
+    lauren_contrib_pct = st.slider("Lauren employee contribution (% of gross income)", 0.0, 30.0, 0.0, 0.5)
 with l2:
-    lauren_employer_match_pct = st.slider("Lauren employer match (% of income)", 0.0, 15.0, 0.0, 0.5)
+    lauren_employer_match_pct = st.slider("Lauren employer match (% of gross income)", 0.0, 15.0, 0.0, 0.5)
 with l3:
     lauren_match_cap_pct = st.slider("Lauren match cap (match only up to % contributed)", 0.0, 15.0, 0.0, 0.5)
 with l4:
     lauren_contrib_start_year = st.number_input("Lauren retirement contributions start year", 0, horizon_years, 0)
 
-# Optional IRA extras (flat annual)
 st.markdown("**Optional: Flat annual IRA contributions (after-tax cash outflow)**")
 ira1, ira2 = st.columns(2)
 with ira1:
@@ -476,16 +660,127 @@ ph_active = False
 
 seller_note_rate = (float(seller_note_rate_pct) / 100.0) if pharmacy_buyin_enabled else 0.0
 
+# New home state (for optional equity in net worth)
+new_home_active = bool(new_home_enabled)
+new_home_down_payment = 0.0
+new_home_initial_value = 0.0
+
+if new_home_enabled and include_new_home_equity_in_networth and compute_loan_from_price and new_home_purchase_price > 0:
+    new_home_initial_value = float(new_home_purchase_price)
+    new_home_down_payment = float(new_home_purchase_price) - float(new_home_loan_amount_eff)
+
 for y in years:
     y = int(y)
 
-    # Incomes
-    cody_income_y = income_stream(cody_income0, cody_growth, y, int(cody_income_start))
-    lauren_income_y = income_stream(lauren_income0, lauren_growth, y, int(lauren_income_start))
-    other_income_y = income_stream(other_income0, other_income_growth, y, 0)
-    base_income_y = cody_income_y + lauren_income_y + other_income_y
+    # -------------------------
+    # Gross incomes
+    # -------------------------
+    cody_gross_y = income_stream(cody_gross0, cody_growth, y, int(cody_income_start))
+    lauren_gross_y = income_stream(lauren_gross0, lauren_growth, y, int(lauren_income_start))
+    other_gross_y = income_stream(other_income0, other_income_growth, y, int(other_income_start))
 
+    # Retirement employee contributions (used both for cashflow + optional tax estimator)
+    cody_emp_contrib = 0.0
+    cody_match = 0.0
+    lauren_emp_contrib = 0.0
+    lauren_match = 0.0
+    cody_ira = 0.0
+    lauren_ira = 0.0
+
+    if y >= int(cody_contrib_start_year):
+        cody_emp_contrib = cody_gross_y * (cody_contrib_pct / 100.0)
+        effective_contrib_pct = min(cody_contrib_pct, cody_match_cap_pct) if cody_match_cap_pct > 0 else 0.0
+        cody_match = cody_gross_y * (min(cody_employer_match_pct, effective_contrib_pct) / 100.0)
+
+    if y >= int(lauren_contrib_start_year):
+        lauren_emp_contrib = lauren_gross_y * (lauren_contrib_pct / 100.0)
+        effective_contrib_pct = min(lauren_contrib_pct, lauren_match_cap_pct) if lauren_match_cap_pct > 0 else 0.0
+        lauren_match = lauren_gross_y * (min(lauren_employer_match_pct, effective_contrib_pct) / 100.0)
+
+    cody_ira = float(cody_ira_annual) if cody_gross_y > 0 else 0.0
+    lauren_ira = float(lauren_ira_annual) if lauren_gross_y > 0 else 0.0
+
+    # -------------------------
+    # Taxes / Net pay
+    # -------------------------
+    est_federal_tax = 0.0
+    est_state_tax = 0.0
+    est_fica_tax = 0.0
+    est_total_tax = 0.0
+
+    if tax_mode == "Simple effective tax %":
+        cody_net_y = cody_gross_y * (1.0 - cody_effective_tax_pct / 100.0)
+        lauren_net_y = lauren_gross_y * (1.0 - lauren_effective_tax_pct / 100.0)
+        if other_income_is_net:
+            other_net_y = other_gross_y
+        else:
+            other_net_y = other_gross_y * (1.0 - other_effective_tax_pct / 100.0)
+
+        if show_tax_line_item:
+            # In simple mode, "tax" is just gross - net
+            est_total_tax = (cody_gross_y - cody_net_y) + (lauren_gross_y - lauren_net_y) + (other_gross_y - other_net_y)
+
+    else:
+        # Estimator mode (household-level)
+        status_key = filing_status
+        std_ded = STD_DEDUCTION_2026.get(status_key, 0.0)
+        brackets = BRACKETS_2026.get(status_key, BRACKETS_2026["Married Filing Jointly"])
+
+        household_gross = cody_gross_y + lauren_gross_y + (other_gross_y if not other_income_is_net else 0.0)
+
+        # Pre-tax deductions approximation: 401(k) employee contributions only (optional)
+        pretax = 0.0
+        if assume_employee_contribs_pretax:
+            pretax += cody_emp_contrib + lauren_emp_contrib
+
+        taxable_income = max(0.0, household_gross - pretax - std_ded)
+        est_federal_tax = progressive_tax(taxable_income, brackets)
+
+        if include_state_tax and state_tax_pct > 0:
+            est_state_tax = max(0.0, household_gross - pretax) * (state_tax_pct / 100.0)
+
+        if include_fica:
+            # Approx: apply FICA per-earner (employee-side)
+            est_fica_tax = (
+                fica_employee_tax(
+                    wages=cody_gross_y,
+                    ss_wage_base=SS_WAGE_BASE_2026,
+                    addl_medicare_threshold=float(addl_medicare_threshold)
+                )
+                + fica_employee_tax(
+                    wages=lauren_gross_y,
+                    ss_wage_base=SS_WAGE_BASE_2026,
+                    addl_medicare_threshold=float(addl_medicare_threshold)
+                )
+            )
+
+        est_total_tax = est_federal_tax + est_state_tax + est_fica_tax
+
+        # Net pay: (gross - estimated taxes) + other income if already net
+        household_net = max(0.0, (household_gross - est_total_tax)) + (other_gross_y if other_income_is_net else 0.0)
+
+        # Allocate net back proportionally for reporting (so charts still work)
+        denom = (cody_gross_y + lauren_gross_y + (other_gross_y if not other_income_is_net else 0.0))
+        if denom <= 0:
+            cody_net_y = 0.0
+            lauren_net_y = 0.0
+            other_net_y = other_gross_y if other_income_is_net else 0.0
+        else:
+            # Net portion attributable to taxable incomes
+            taxable_net_pool = max(0.0, household_gross - est_total_tax)
+            cody_net_y = taxable_net_pool * (cody_gross_y / denom)
+            lauren_net_y = taxable_net_pool * (lauren_gross_y / denom)
+            if other_income_is_net:
+                other_net_y = other_gross_y
+            else:
+                other_net_y = taxable_net_pool * (other_gross_y / denom)
+
+    # Base income for cashflow uses NET
+    base_income_net_y = cody_net_y + lauren_net_y + other_net_y
+
+    # -------------------------
     # Expenses (inflation)
+    # -------------------------
     base_expenses_y = float(base_living_expenses) * ((1 + expense_growth / 100.0) ** y)
 
     # Push-hard adjustments
@@ -496,34 +791,19 @@ for y in years:
     if frugal_mode and (frugal_start <= y < frugal_start + frugal_years):
         base_expenses_y *= (1.0 - frugal_expense_reduction_pct / 100.0)
 
-    income_y = base_income_y + extra_income_y
+    # Treat push-hard extra income as NET (so it affects cashflow)
+    income_y = base_income_net_y + extra_income_y
     expenses_y = base_expenses_y + extra_cost_y
 
+    # -------------------------
     # Student loans
+    # -------------------------
     sl_remaining = student_loan_remaining(y)
     sl_pay_y = student_loan_payment_annual if (y >= student_loan_start_year and sl_remaining > 0) else 0.0
 
-    # Retirement contributions + match
-    cody_emp_contrib = 0.0
-    cody_match = 0.0
-    lauren_emp_contrib = 0.0
-    lauren_match = 0.0
-    cody_ira = 0.0
-    lauren_ira = 0.0
-
-    if y >= int(cody_contrib_start_year):
-        cody_emp_contrib = cody_income_y * (cody_contrib_pct / 100.0)
-        effective_contrib_pct = min(cody_contrib_pct, cody_match_cap_pct) if cody_match_cap_pct > 0 else 0.0
-        cody_match = cody_income_y * (min(cody_employer_match_pct, effective_contrib_pct) / 100.0)
-
-    if y >= int(lauren_contrib_start_year):
-        lauren_emp_contrib = lauren_income_y * (lauren_contrib_pct / 100.0)
-        effective_contrib_pct = min(lauren_contrib_pct, lauren_match_cap_pct) if lauren_match_cap_pct > 0 else 0.0
-        lauren_match = lauren_income_y * (min(lauren_employer_match_pct, effective_contrib_pct) / 100.0)
-
-    cody_ira = float(cody_ira_annual) if cody_income_y > 0 else 0.0
-    lauren_ira = float(lauren_ira_annual) if lauren_income_y > 0 else 0.0
-
+    # -------------------------
+    # Retirement balances
+    # -------------------------
     total_ret_contrib_outflow = 0.0
     if count_retirement_contrib_as_expense:
         total_ret_contrib_outflow = cody_emp_contrib + lauren_emp_contrib + cody_ira + lauren_ira
@@ -532,7 +812,48 @@ for y in years:
     lauren_ret = grow_balance(lauren_ret + lauren_emp_contrib + lauren_match + lauren_ira, retirement_return)
     total_retirement = cody_ret + lauren_ret
 
+    # -------------------------
+    # Primary residence / new home payment (PITI)
+    # -------------------------
+    new_home_piti_y = 0.0
+    new_home_value_y = 0.0
+    new_home_mort_bal_y = 0.0
+    new_home_equity_y = 0.0
+    new_home_liquidation_proceeds = 0.0
+
+    if new_home_enabled and y >= int(new_home_start_year) and new_home_loan_amount_eff > 0:
+        months_paid = int((y - int(new_home_start_year)) * 12)
+
+        pmt_m = amort_payment(new_home_loan_amount_eff, float(new_home_rate_pct) / 100.0, int(new_home_term_years))
+        pi_annual = 12.0 * pmt_m
+
+        escrow_annual = float(new_home_property_tax_annual) + float(new_home_insurance_annual)
+        pmi_annual = 12.0 * float(new_home_pmi_monthly)
+        hoa_annual = 12.0 * float(new_home_hoa_monthly)
+
+        new_home_piti_y = pi_annual + escrow_annual + pmi_annual + hoa_annual
+
+        if include_new_home_equity_in_networth and compute_loan_from_price and new_home_purchase_price > 0:
+            yrs_held = max(0, y - int(new_home_start_year))
+            new_home_value_y = float(new_home_purchase_price) * ((1 + float(new_home_value_growth_pct) / 100.0) ** yrs_held)
+            new_home_mort_bal_y = mortgage_balance(
+                principal=float(new_home_loan_amount_eff),
+                annual_rate=float(new_home_rate_pct) / 100.0,
+                years=int(new_home_term_years),
+                months_paid=months_paid
+            )
+            new_home_equity_y = max(0.0, new_home_value_y - new_home_mort_bal_y)
+
+            if int(new_home_sell_year) > 0 and y == int(new_home_sell_year):
+                sell_cost = (float(new_home_selling_cost_pct) / 100.0) * new_home_value_y
+                new_home_liquidation_proceeds = max(0.0, new_home_value_y - sell_cost - new_home_mort_bal_y)
+                cash += new_home_liquidation_proceeds
+                # Stop counting it after sale (simple: disable)
+                new_home_enabled = False
+
+    # -------------------------
     # Properties
+    # -------------------------
     rental_cf_y = 0.0
     total_equity = 0.0
     total_heloc = 0.0
@@ -609,12 +930,16 @@ for y in years:
             stt["active"] = False
             liquidated_props += 1
 
+    # -------------------------
     # Mortgage savings cashflow (optional)
+    # -------------------------
     mort_savings_y = 0.0
     if include_mortgage_prepay_savings and (y >= int(mortgage_savings_start_year)):
         mort_savings_y = float(mortgage_savings_annual)
 
+    # -------------------------
     # Pharmacy buy-in cashflow + note + equity value
+    # -------------------------
     ph_profit_y = 0.0
     ph_note_payment_y = 0.0
     ph_note_interest_y = 0.0
@@ -622,17 +947,12 @@ for y in years:
     ph_extra_principal_y = 0.0
 
     if pharmacy_buyin_enabled:
-        # Buy-in event
         if (y == int(pharmacy_buyin_year)) and (not ph_active):
             ph_active = True
             cash -= float(pharmacy_cash_down)
             ph_note_balance = max(0.0, float(pharmacy_buyin_price) - float(pharmacy_cash_down))
-            # Annual payment (simple annual amort approximation)
-            # This matches the model’s annual cadence (not exact monthly amort)
-            # Still “close enough” for planning.
+
             if seller_note_years > 0 and ph_note_balance > 0:
-                # Use annual amort approx: convert note_rate to annual and compute a level annual payment
-                # Payment formula (annual):
                 r = seller_note_rate
                 n = int(seller_note_years)
                 if r == 0:
@@ -642,30 +962,24 @@ for y in years:
             else:
                 ph_annual_payment = 0.0
 
-            # Equity value at purchase (can grow)
             ph_equity_value = float(pharmacy_buyin_price)
 
-        # Grow equity value each year after activation (end-of-year style)
         if ph_active and y >= int(pharmacy_buyin_year):
             yrs_since = y - int(pharmacy_buyin_year)
             ph_equity_value = float(pharmacy_buyin_price) * ((1 + float(pharmacy_equity_growth_pct) / 100.0) ** yrs_since)
 
-       # Profit stream (with optional annual growth)
+        # Profit stream (with optional annual growth)
         if ph_active and (y >= int(pharmacy_profit_start_year)):
-
-            # If growth starts later than profit start, keep flat until then
             if y < int(pharmacy_profit_growth_start_year):
                 growth_years = 0
             else:
                 growth_years = y - int(pharmacy_profit_growth_start_year)
-        
+
             ph_profit_y = float(pharmacy_expected_profit) * (
                 (1 + float(pharmacy_profit_growth_pct) / 100.0) ** growth_years
             )
 
-        # Note amortization (during active years)
         if ph_active and ph_note_balance > 0 and ph_annual_payment > 0:
-            # Extra principal logic
             extra = 0.0
             if enable_accel_paydown:
                 if int(accel_year) > 0 and y == int(accel_year):
@@ -681,11 +995,14 @@ for y in years:
                 extra_principal=extra
             )
 
+    # -------------------------
     # Net cash flow and cash update
-    # Add mortgage savings + pharmacy profit; subtract seller note payments
+    # -------------------------
+    # Note: income_y is NET (per your new requirement).
     net_cash_flow_y = (
         income_y
         - expenses_y
+        - new_home_piti_y
         - sl_pay_y
         + rental_cf_y
         + mort_savings_y
@@ -697,24 +1014,42 @@ for y in years:
     if reinvest_surplus:
         cash += net_cash_flow_y
 
+    # -------------------------
     # Net worth
+    # -------------------------
     net_worth = cash + total_equity - sl_remaining
+
     if include_retirement_in_networth:
         net_worth += total_retirement
+
     if pharmacy_buyin_enabled and include_pharmacy_equity_in_networth and ph_active:
-        # Add pharmacy equity, subtract remaining seller note balance (liability)
         net_worth += (ph_equity_value - ph_note_balance)
+
+    if include_new_home_equity_in_networth:
+        net_worth += new_home_equity_y
 
     status = "🟢 Sustainable" if net_cash_flow_y >= 30000 else ("🟡 Tight buffer" if net_cash_flow_y >= 10000 else "🔴 At risk")
 
     rows.append({
         "Year": y,
-        "Cody Income": round(cody_income_y, 2),
-        "Lauren Income": round(lauren_income_y, 2),
-        "Other Income": round(other_income_y, 2),
-        "Income (Total)": round(income_y, 2),
 
-        "Expenses": round(expenses_y, 2),
+        "Cody Gross": round(cody_gross_y, 2),
+        "Lauren Gross": round(lauren_gross_y, 2),
+        "Other Gross": round(other_gross_y, 2),
+
+        "Cody Net": round(cody_net_y, 2),
+        "Lauren Net": round(lauren_net_y, 2),
+        "Other Net": round(other_net_y, 2),
+
+        "Income (Net Total)": round(income_y, 2),
+
+        "Estimated Taxes (Total)": round(est_total_tax, 2) if show_tax_line_item else 0.0,
+        "Estimated Federal Tax": round(est_federal_tax, 2) if show_tax_line_item else 0.0,
+        "Estimated State Tax": round(est_state_tax, 2) if show_tax_line_item else 0.0,
+        "Estimated FICA": round(est_fica_tax, 2) if show_tax_line_item else 0.0,
+
+        "Expenses (non-property)": round(expenses_y, 2),
+        "New Home PITI+HOA (annual)": round(new_home_piti_y, 2),
 
         "Retirement Employee Contrib": round(cody_emp_contrib + lauren_emp_contrib, 2),
         "Retirement Employer Match": round(cody_match + lauren_match, 2),
@@ -739,8 +1074,13 @@ for y in years:
 
         "Investable Cash": round(cash, 2),
         "Total Property Value (active)": round(total_property_value, 2),
-        "Total Equity (active)": round(total_equity, 2),
+        "Total Equity (active rentals)": round(total_equity, 2),
         "HELOC Outstanding": round(total_heloc, 2),
+
+        "New Home Value": round(new_home_value_y, 2),
+        "New Home Mortgage Balance": round(new_home_mort_bal_y, 2),
+        "New Home Equity": round(new_home_equity_y, 2),
+        "New Home Liquidation Proceeds": round(new_home_liquidation_proceeds, 2),
 
         "Net Worth": round(net_worth, 2),
 
@@ -764,7 +1104,7 @@ m1.metric("Final Net Worth", f"${df.loc[df.index[-1], 'Net Worth']:,.0f}")
 m2.metric("Final Net Cash Flow", f"${df.loc[df.index[-1], 'Net Cash Flow']:,.0f}")
 m3.metric("Final Active Properties", f"{df.loc[df.index[-1], 'Active Properties']}")
 m4.metric("Final Investable Cash", f"${df.loc[df.index[-1], 'Investable Cash']:,.0f}")
-m5.metric("Final Equity (active)", f"${df.loc[df.index[-1], 'Total Equity (active)']:,.0f}")
+m5.metric("Final Equity (active rentals)", f"${df.loc[df.index[-1], 'Total Equity (active rentals)']:,.0f}")
 m6.metric("Final Retirement (total)", f"${df.loc[df.index[-1], 'Retirement Balance (Total)']:,.0f}")
 
 # Net cash flow chart
@@ -794,15 +1134,15 @@ ax3.set_ylabel("Dollars")
 ax3.set_title("Retirement Balance Over Time")
 st.pyplot(fig3)
 
-# Income breakdown chart
+# Income breakdown chart (NET)
 fig4, ax4 = plt.subplots()
-ax4.plot(df["Year"], df["Cody Income"], linewidth=2)
-ax4.plot(df["Year"], df["Lauren Income"], linewidth=2)
-ax4.plot(df["Year"], df["Other Income"], linewidth=2)
+ax4.plot(df["Year"], df["Cody Net"], linewidth=2)
+ax4.plot(df["Year"], df["Lauren Net"], linewidth=2)
+ax4.plot(df["Year"], df["Other Net"], linewidth=2)
 ax4.set_xlabel("Year")
 ax4.set_ylabel("Dollars")
-ax4.set_title("Income Breakdown Over Time")
-ax4.legend(["Cody", "Lauren", "Other"])
+ax4.set_title("Net Income Breakdown Over Time")
+ax4.legend(["Cody Net", "Lauren Net", "Other Net"])
 st.pyplot(fig4)
 
 # Active properties chart
@@ -816,13 +1156,23 @@ st.pyplot(fig5)
 # Cash vs equity vs retirement chart
 fig6, ax6 = plt.subplots()
 ax6.plot(df["Year"], df["Investable Cash"], linewidth=2)
-ax6.plot(df["Year"], df["Total Equity (active)"], linewidth=2)
+ax6.plot(df["Year"], df["Total Equity (active rentals)"], linewidth=2)
 ax6.plot(df["Year"], df["Retirement Balance (Total)"], linewidth=2)
 ax6.set_xlabel("Year")
 ax6.set_ylabel("Dollars")
 ax6.set_title("Cash vs Equity vs Retirement")
-ax6.legend(["Investable Cash", "Total Equity", "Retirement"])
+ax6.legend(["Investable Cash", "Total Equity (rentals)", "Retirement"])
 st.pyplot(fig6)
+
+# Taxes chart (if enabled)
+if show_tax_line_item:
+    st.subheader("Estimated Taxes (if enabled)")
+    figt, axt = plt.subplots()
+    axt.plot(df["Year"], df["Estimated Taxes (Total)"], linewidth=2)
+    axt.set_xlabel("Year")
+    axt.set_ylabel("Dollars")
+    axt.set_title("Estimated Taxes (Total) Over Time")
+    st.pyplot(figt)
 
 # Pharmacy charts (only if enabled)
 if pharmacy_buyin_enabled:
@@ -843,32 +1193,40 @@ if pharmacy_buyin_enabled:
     ax8.legend(["Profit", "Note Payment"])
     st.pyplot(fig8)
 
+# New home equity charts (only if enabled)
+if new_home_enabled and include_new_home_equity_in_networth:
+    st.subheader("New Home Equity Charts")
+    fignh, axnh = plt.subplots()
+    axnh.plot(df["Year"], df["New Home Equity"], linewidth=2)
+    axnh.set_xlabel("Year")
+    axnh.set_ylabel("Dollars")
+    axnh.set_title("New Home Equity Over Time (simple)")
+    st.pyplot(fignh)
+
 st.dataframe(df, use_container_width=True)
 
 with st.expander("Notes / simplifications"):
     st.markdown(
         """
+- **Gross → Net income**:
+  - All salary inputs are **GROSS**.
+  - Cashflow uses **NET** income.
+  - You can choose:
+    - **Simple effective tax %** (per-person), or
+    - **Tax estimator** (household-level progressive federal + optional state + optional employee FICA).
+- **Tax estimator** (offline approximation):
+  - Uses standard deduction + published 2026 brackets.
+  - Optional: treats **401(k) employee contributions** as pre-tax to reduce taxable income.
+  - Optional: includes employee-side FICA (SS+Medicare+Additional Medicare).
+  - This is planning-level, not a substitute for a tax return.
+- **New house mortgage**:
+  - Models annual **PITI + HOA + PMI** as a cashflow expense starting at your selected year.
+  - Optional simple equity tracking if you enter purchase price + compute loan from price/down.
 - **Pharmacy buy-in**:
-  - Models a buy-in with **cash down** + a **seller note** (annual amort approximation).
-  - Adds **pharmacy profit** to annual cash flow and subtracts **seller note payment**.
-  - Optional: apply a **lump sum extra principal** in a chosen year (e.g., Lauren distribution) and/or a recurring extra annual principal.
-  - Optional: include **pharmacy equity value** in Net Worth (with optional % growth). Net worth subtracts the remaining seller note balance.
-- **Mortgage prepay savings**:
-  - Models the savings as extra annual free cash flow starting at the chosen year (does not change property amortization here).
-- **Retirement added**:
-  - Separate balances for Cody + Lauren
-  - Employee contribution as % of income
-  - Employer match as % of income, capped by a max % of income matched *and* only up to your contribution %
-  - Optional flat annual IRA contributions
-  - Retirement balances grow at an assumed annual return
-- **Cashflow handling**:
-  - If “Treat retirement contributions as cash outflow” is ON, employee contributions + IRA contributions reduce Net Cash Flow and cash.
-  - Employer match does **not** reduce cash (free money into retirement).
-- **Net Worth**:
-  - Always includes: Cash + Property Equity − Student Loan Remaining
-  - Optionally includes retirement balances (toggle)
-  - Optionally includes pharmacy equity net of seller note (toggle)
+  - Models cash down + seller note (annual amort approximation).
+  - Adds pharmacy profit to cashflow; subtracts seller note payment.
+  - Optional accelerated paydown (lump sum + recurring).
 - **HELOC**: one draw event per property (for now), capped by CLTV; interest charged annually.
-- **Liquidation**: no selling costs/taxes modeled yet.
+- **Liquidation**: no selling taxes modeled on rentals; new home has a simple selling cost %.
         """
     )
