@@ -1229,4 +1229,124 @@ with st.expander("Notes / simplifications"):
 - **HELOC**: one draw event per property (for now), capped by CLTV; interest charged annually.
 - **Liquidation**: no selling taxes modeled on rentals; new home has a simple selling cost %.
         """
+# -----------------------------
+# REPORT EXPORT (printable + download)
+# -----------------------------
+st.subheader("Report")
+
+report_title = st.text_input("Report title", "Financial Freedom Timeline Planner — Report")
+report_notes = st.text_area("Report notes (optional)", "")
+
+# Build a clean report-friendly dataframe (optionally hide some columns)
+hide_cols_default = [
+    # Keep raw gross/net, but hide some very detailed internals if you want
+    # "Estimated Federal Tax", "Estimated State Tax", "Estimated FICA",
+]
+cols_to_hide = st.multiselect("Hide columns in report", options=list(df.columns), default=hide_cols_default)
+df_report = df.drop(columns=cols_to_hide, errors="ignore").copy()
+
+def _df_to_markdown_table(dframe: pd.DataFrame) -> str:
+    try:
+        return dframe.to_markdown(index=False)
+    except Exception:
+        # fallback if tabulate isn't installed in the runtime
+        return dframe.to_csv(index=False)
+
+# Summary snapshot
+summary_lines = []
+summary_lines.append(f"Report Title: {report_title}")
+summary_lines.append(f"Horizon (years): {int(horizon_years)}")
+summary_lines.append(f"Final Net Worth: ${df.loc[df.index[-1], 'Net Worth']:,.0f}")
+summary_lines.append(f"Final Net Cash Flow: ${df.loc[df.index[-1], 'Net Cash Flow']:,.0f}")
+summary_lines.append(f"Final Investable Cash: ${df.loc[df.index[-1], 'Investable Cash']:,.0f}")
+summary_lines.append(f"Final Active Properties: {int(df.loc[df.index[-1], 'Active Properties'])}")
+summary_lines.append(f"Final Retirement (total): ${df.loc[df.index[-1], 'Retirement Balance (Total)']:,.0f}")
+if show_tax_line_item:
+    summary_lines.append(f"Final Estimated Taxes (Total): ${df.loc[df.index[-1], 'Estimated Taxes (Total)']:,.0f}")
+
+summary_text = "\n".join(summary_lines)
+
+# 1) PRINT-FRIENDLY VIEW (browser print)
+st.markdown("### Print-friendly (browser print)")
+st.markdown(
+    """
+Use your browser print dialog:
+- **Mac:** Cmd+P  
+- **Windows:** Ctrl+P  
+Then choose **Save as PDF**.
+"""
+)
+
+st.markdown(f"## {report_title}")
+st.markdown("### Summary")
+st.code(summary_text)
+
+if report_notes.strip():
+    st.markdown("### Notes")
+    st.write(report_notes)
+
+st.markdown("### Results Table (report)")
+st.dataframe(df_report, use_container_width=True)
+
+# 2) DOWNLOADABLE FILES
+st.markdown("### Downloads")
+
+# CSV download
+csv_bytes = df_report.to_csv(index=False).encode("utf-8")
+st.download_button(
+    label="Download report table (CSV)",
+    data=csv_bytes,
+    file_name="financial_report.csv",
+    mime="text/csv"
+)
+
+# HTML download (good for printing / sharing)
+html_table = df_report.to_html(index=False)
+html_doc = f"""
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>{report_title}</title>
+  <style>
+    body {{ font-family: Arial, sans-serif; padding: 24px; }}
+    h1, h2, h3 {{ margin: 0.4em 0; }}
+    .summary {{ white-space: pre-wrap; background: #f7f7f7; padding: 12px; border-radius: 8px; }}
+    table {{ border-collapse: collapse; width: 100%; font-size: 12px; }}
+    th, td {{ border: 1px solid #ddd; padding: 6px 8px; }}
+    th {{ background: #f0f0f0; }}
+    @media print {{
+      body {{ padding: 0; }}
+      table {{ font-size: 10px; }}
+    }}
+  </style>
+</head>
+<body>
+  <h1>{report_title}</h1>
+  <h2>Summary</h2>
+  <div class="summary">{summary_text.replace("\n","<br>")}</div>
+  {"<h2>Notes</h2><div class='summary'>" + report_notes.replace("\n","<br>") + "</div>" if report_notes.strip() else ""}
+  <h2>Results</h2>
+  {html_table}
+</body>
+</html>
+"""
+st.download_button(
+    label="Download printable report (HTML)",
+    data=html_doc.encode("utf-8"),
+    file_name="financial_report.html",
+    mime="text/html"
+)
+
+# Optional: Markdown download (nice for Notion / email)
+md_doc = f"# {report_title}\n\n## Summary\n\n```\n{summary_text}\n```\n\n"
+if report_notes.strip():
+    md_doc += f"## Notes\n\n{report_notes}\n\n"
+md_doc += "## Results Table\n\n" + _df_to_markdown_table(df_report) + "\n"
+st.download_button(
+    label="Download report (Markdown)",
+    data=md_doc.encode("utf-8"),
+    file_name="financial_report.md",
+    mime="text/markdown"
+)
     )
